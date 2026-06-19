@@ -116,7 +116,8 @@ app/
   service.py       # мост ORM ↔ генератор (стратегии, профили, разбивки)
   excel_export.py  # сборка .xlsx (разворот/группировка) и ZIP
   parsing.py       # парсинг и умный импорт проектов из CSV/Excel
-  jokes.py         # SEO-шутки (OpenRouter + фолбэк)
+  jokes.py         # SEO-шутки (батч-кэш OpenRouter + фолбэк без повторов)
+  appsettings.py   # ключи OpenRouter (2 слота) и их хранение в БД
   models.py        # ORM-модели (SQLite)
   database.py      # подключение к БД
   seed.py          # базовые стратегии/профили/суффиксы + миграции схемы
