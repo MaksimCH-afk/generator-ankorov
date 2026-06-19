@@ -33,7 +33,7 @@ from .database import Base
 SUFFIX_LANGUAGES = ["en", "de", "pl", "tr", "pt-br"]
 
 # SEO specialists offered in the export dropdown (default = first).
-SEO_SPECIALISTS = ["Miles Nashwood", "Fay"]
+SEO_SPECIALISTS = ["Miles Nashwood"]
 
 # Preset article languages offered as a dropdown for projects (English names).
 # Empty string is used as the special "do not include in export" value.

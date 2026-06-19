@@ -53,22 +53,29 @@ def _line(row: GeneratedRow, sprint: str, seo: str, url_type: str,
 
 
 def _write_sheet(ws, rows: list[GeneratedRow], columns: list[str], sprint: str, seo: str,
-                 url_type: str, include_language: bool, language: str) -> None:
+                 url_type: str, include_language: bool, language: str, grouped: bool) -> None:
     ws.append(columns)
     for cell in ws[1]:
         cell.fill = HEADER_FILL
         cell.font = HEADER_FONT
 
-    # One row per link: repeat each anchor by its link quantity.
     for row in rows:
         line = _line(row, sprint, seo, url_type, include_language, language)
-        for _ in range(max(0, row.link_qty)):
-            ws.append(line)
+        if grouped:
+            # One row per anchor with a leading quantity column.
+            if row.link_qty > 0:
+                ws.append([row.link_qty] + line)
+        else:
+            # Expanded: one row per link.
+            for _ in range(max(0, row.link_qty)):
+                ws.append(line)
 
     # Column widths computed from the unique (un-expanded) rows for speed.
     widths = [len(c) for c in columns]
     for row in rows:
-        for i, value in enumerate(_line(row, sprint, seo, url_type, include_language, language)):
+        line = _line(row, sprint, seo, url_type, include_language, language)
+        values = ([str(row.link_qty)] + line) if grouped else line
+        for i, value in enumerate(values):
             widths[i] = max(widths[i], len(str(value)))
     for i, width in enumerate(widths):
         ws.column_dimensions[get_column_letter(i + 1)].width = min(width + 4, 70)
@@ -77,22 +84,23 @@ def _write_sheet(ws, rows: list[GeneratedRow], columns: list[str], sprint: str, 
 
 def build_workbook(sheets: dict[str, list[GeneratedRow]], *, sprint: str = "",
                    seo_specialist: str = "", language: str = "",
-                   include_language: bool | None = None) -> bytes:
+                   include_language: bool | None = None, grouped: bool = False) -> bytes:
     """Build one .xlsx file. ``sheets`` maps sheet name -> rows.
 
-    Each link becomes its own row. ``Article Language`` is appended as a column
-    when a language is set (unless ``include_language`` overrides).
+    By default each link is its own row. With ``grouped=True`` each anchor is a
+    single row plus a leading ``Link Q-ty`` quantity column. ``Article Language``
+    is appended as a column when a language is set.
     """
     if include_language is None:
         include_language = bool((language or "").strip())
-    columns = BASE_COLUMNS + ([LANG_COLUMN] if include_language else [])
+    columns = (["Link Q-ty"] if grouped else []) + BASE_COLUMNS + ([LANG_COLUMN] if include_language else [])
 
     wb = Workbook()
     wb.remove(wb.active)
     for name, rows in sheets.items():
         ws = wb.create_sheet(title=_safe_sheet_name(name))
         url_type = "Inner Page" if name == INTERNAL_SHEET else "Main Page"
-        _write_sheet(ws, rows, columns, sprint, seo_specialist, url_type, include_language, language)
+        _write_sheet(ws, rows, columns, sprint, seo_specialist, url_type, include_language, language, grouped)
     if not wb.sheetnames:  # never leave an empty workbook
         wb.create_sheet(title="Empty")
     buffer = io.BytesIO()

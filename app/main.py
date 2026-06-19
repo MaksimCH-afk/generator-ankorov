@@ -350,7 +350,7 @@ def project_page(pid: int, request: Request, db: Session = Depends(get_db), msg:
 def create_project(
     db: Session = Depends(get_db),
     url: str = Form(...),
-    language: str = Form("English"),
+    language: str = Form(""),   # empty = "do not include in export"
     brand: str = Form(""),
 ):
     project = Project(url=url.strip(), language=language.strip(), brand=brand.strip())
@@ -705,6 +705,7 @@ async def generate(request: Request, db: Session = Depends(get_db)):
     export_format = form.get("export_format", "separate")
     sprint = (form.get("sprint") or "").strip()
     seo_specialist = (form.get("seo_specialist") or "").strip()
+    grouped = form.get("group_mode") == "group"
     if not pids:
         return RedirectResponse("/generate?error=Выберите хотя бы один проект.", status_code=303)
 
@@ -716,6 +717,7 @@ async def generate(request: Request, db: Session = Depends(get_db)):
             continue
         files[safe_filename(project.url)] = build_workbook(
             sheets, sprint=sprint, seo_specialist=seo_specialist, language=project.language or "",
+            grouped=grouped,
         )
         _record_history(db, project, export_format, sheets)
         log_event(db, "INFO", "generate", f"Сгенерирован {project.url}",
