@@ -1,35 +1,31 @@
 {% extends "base.html" %}
 {% block page_title %}Проект{% endblock %}
-{% block content %}
-<div class="page-head">
-    <div>
-        <h1>{{ project.url }}</h1>
-        <div class="sub mono">{{ project.brand or 'без бренда' }} · {{ project.language or 'язык не указан' }}</div>
-    </div>
-    <div class="row-actions">
-        <a class="btn btn-sec" href="/projects/{{ project.id }}/preview">Превью результата</a>
-        <a class="btn" href="/generate">К генерации</a>
-    </div>
+{% block head_title %}{{ project.url }}{% endblock %}
+{% block subtitle %}{{ project.brand or 'без бренда' }} · {{ project.language or 'язык не указан' }}{% endblock %}
+{% block head_actions %}
+<div class="row-actions">
+    <a class="btn btn-sec" href="/projects/{{ project.id }}/preview">Превью</a>
+    {% if progress.ready %}<a class="btn" href="/projects/{{ project.id }}/export">⬇ Скачать Excel</a>{% endif %}
+    <a class="btn btn-sec" href="/generate">К генерации</a>
 </div>
+{% endblock %}
 
+{% block content %}
 <div class="card">
-    <h2>Основные параметры</h2>
+    <div class="card-title">Основные параметры</div>
     <form method="post" action="/projects/{{ project.id }}/basics">
         <div class="grid grid-3">
             <div class="field"><label>URL домена</label><input name="url" value="{{ project.url }}" required></div>
             <div class="field">
                 <label>Язык статьи</label>
                 <select name="language">
-                    {% for lang in article_languages %}
-                    <option value="{{ lang }}" {{ 'selected' if project.language==lang }}>{{ lang }}</option>
-                    {% endfor %}
+                    {% for lang in article_languages %}<option value="{{ lang }}" {{ 'selected' if project.language==lang }}>{{ lang }}</option>{% endfor %}
                     <option value="" {{ 'selected' if not project.language }}>— Не указывать в выгрузке —</option>
                 </select>
             </div>
             <div class="field">
-                <label>Бренд <span class="muted">(необязательно)</span></label>
+                <label>Бренд <span style="text-transform:none;font-weight:500;color:var(--muted-2)">(необязательно)</span></label>
                 <input name="brand" value="{{ project.brand }}" placeholder="betalice">
-                <div class="help-text">Нужен только для анкоров внутренних страниц.</div>
             </div>
         </div>
         <button type="submit">Сохранить</button>
@@ -37,44 +33,39 @@
 </div>
 
 <div class="card">
-    <div class="block-head"><span class="dot {{ 'done' if progress.has_keywords }}">{{ '✓' if progress.has_keywords else '1' }}</span><h2 style="margin:0">Частотка ({{ keywords|length }} ключей)</h2></div>
+    <div class="block-head"><span class="dot {{ 'done' if progress.has_keywords }}">{{ '✓' if progress.has_keywords else '1' }}</span><div class="card-title" style="margin:0">Частотка ({{ keywords|length }} ключей)</div></div>
     <div class="spacer"></div>
     <form method="post" action="/projects/{{ project.id }}/keywords" enctype="multipart/form-data" class="inline">
         <input type="file" name="file" accept=".csv,.xlsx,.xlsm">
         <button class="narrow" type="submit">Загрузить</button>
     </form>
-    <p class="help-text">Файл с колонками <span class="mono">keyword | frequency</span> (CSV или Excel). Загрузка заменяет текущую частотку проекта.</p>
+    <p class="help-text">Файл с колонками <span class="mono">keyword | frequency</span>. Загрузка заменяет текущую частотку.</p>
     {% if keywords %}
-    <div class="table-wrap">
+    <div class="table-wrap" style="margin-top:12px;border:1px solid var(--line);border-radius:11px">
     <table>
         <thead><tr><th>#</th><th>Ключ</th><th class="num">Частотность</th></tr></thead>
-        <tbody>
-        {% for k in keywords %}<tr><td>{{ loop.index }}</td><td>{{ k.keyword }}</td><td class="num">{{ k.frequency }}</td></tr>{% endfor %}
-        </tbody>
+        <tbody>{% for k in keywords %}<tr><td>{{ loop.index }}</td><td>{{ k.keyword }}</td><td class="num">{{ k.frequency }}</td></tr>{% endfor %}</tbody>
     </table>
     </div>
     {% endif %}
 </div>
 
 <div class="card">
-    <div class="block-head"><span class="dot {{ 'done' if progress.has_strategy }}">{{ '✓' if progress.has_strategy else '2' }}</span><h2 style="margin:0">Стратегия</h2></div>
+    <div class="block-head"><span class="dot {{ 'done' if progress.has_strategy }}">{{ '✓' if progress.has_strategy else '2' }}</span><div class="card-title" style="margin:0">Стратегия</div></div>
     <div class="spacer"></div>
     <form method="post" action="/projects/{{ project.id }}/strategy" class="inline">
         <input type="hidden" name="next" value="/projects/{{ project.id }}">
         <select name="strategy_id" style="min-width:320px;flex:0 1 460px">
             <option value="">— не выбрана —</option>
-            {% for o in strategy_options %}
-            <option value="{{ o.id }}" {{ 'selected' if project.strategy_id==o.id }}>{{ o.label }}</option>
-            {% endfor %}
+            {% for o in strategy_options %}<option value="{{ o.id }}" {{ 'selected' if project.strategy_id==o.id }}>{{ o.label }}</option>{% endfor %}
         </select>
         <button class="narrow" type="submit">Применить</button>
     </form>
-    <p class="help-text">Стратегия задаёт профиль анкоров и вид безанкора. Тип кампании (прогоны / крауд+сабмиты) определяется выбранной стратегией. Настроить стратегии — на вкладке «Стратегии».</p>
-
+    <p class="help-text">Стратегия задаёт профиль анкоров и вид безанкора. Тип кампании (прогоны / крауд+сабмиты) — тоже из стратегии.</p>
     <details style="margin-top:12px">
         <summary class="muted" style="cursor:pointer">Перераспределение отсутствующих ролей (опционально)</summary>
         <form method="post" action="/projects/{{ project.id }}/redistribution" style="margin-top:10px">
-            <p class="help-text" style="margin-top:0">JSON: <span class="mono">{"добавочный 2": {"основной 1": 100}}</span>. Пусто → освободившийся % уходит в безанкор.</p>
+            <p class="help-text" style="margin-top:0">JSON: <span class="mono">{"добавочный 2": {"основной 1": 100}}</span>. Пусто → освободившийся % в безанкор.</p>
             <textarea name="redistribution_json">{{ project.redistribution_json if project.redistribution_json != '{}' else '' }}</textarea>
             <div class="spacer"></div>
             <button type="submit" class="btn-sec btn-sm">Сохранить перераспределение</button>
@@ -83,23 +74,18 @@
 </div>
 
 <div class="card">
-    <div class="block-head"><span class="dot {{ 'done' if progress.has_volume }}">{{ '✓' if progress.has_volume else '3' }}</span><h2 style="margin:0">Объём</h2></div>
+    <div class="block-head"><span class="dot {{ 'done' if progress.has_volume }}">{{ '✓' if progress.has_volume else '3' }}</span><div class="card-title" style="margin:0">Объём</div></div>
     <div class="spacer"></div>
     <form method="post" action="/projects/{{ project.id }}/volume" class="inline">
         <div class="narrow"><input name="volume" type="number" min="0" value="{{ project.volume }}"></div>
         <button class="narrow" type="submit">Сохранить</button>
     </form>
-    <p class="help-text">Сколько всего ссылок раздать на этот URL. Как они распределятся (безанкор + роли ключей или 100% безанкор) — решает выбранная стратегия.</p>
+    <p class="help-text">Сколько всего ссылок раздать на URL. Как распределятся — решает стратегия.</p>
 </div>
 
 <div class="card">
-    <div class="block-head"><span class="dot {{ 'done' if progress.ready }}">{{ '✓' if progress.ready else '4' }}</span><h2 style="margin:0">Генерация</h2></div>
+    <div class="block-head"><span class="dot {{ 'done' if progress.ready }}">{{ '✓' if progress.ready else '4' }}</span><div class="card-title" style="margin:0">Генерация</div></div>
     <div class="spacer"></div>
-    {% if progress.ready %}
-    <p class="help-text" style="margin-top:0">Всё готово. Проверьте результат в превью или переходите к выгрузке.</p>
-    {% else %}
-    <p class="help-text" style="margin-top:0">Заполните шаги 1–3 выше, чтобы проект был готов к генерации.</p>
-    {% endif %}
     <div class="row-actions">
         <a class="btn btn-sec" href="/projects/{{ project.id }}/preview">Превью результата</a>
         {% if progress.ready %}<a class="btn" href="/projects/{{ project.id }}/export">⬇ Скачать Excel</a>{% endif %}
@@ -108,24 +94,18 @@
 </div>
 
 <div class="card">
-    <h2>Внутренние страницы</h2>
-    <p class="help-text" style="margin-top:0">Анкоры типовых страниц (app, login, bonus…) настраиваются для проекта в разделе <a href="/suffixes?project={{ project.id }}">«Внутренние страницы»</a>.</p>
+    <div class="card-title">Внутренние страницы</div>
+    <p class="help-text" style="margin-top:0">Анкоры типовых страниц настраиваются в разделе <a href="/suffixes?project={{ project.id }}">«Внутренние страницы»</a>.</p>
 </div>
 
-<div class="card">
-    <div class="row-actions" style="justify-content:flex-end">
-        <form method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm('Удалить проект?')">
-            <button class="btn-danger" type="submit">Удалить проект</button>
-        </form>
-    </div>
+<div class="row-actions" style="justify-content:flex-end">
+    <form method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm('Удалить проект?')">
+        <button class="btn-danger" type="submit">Удалить проект</button>
+    </form>
 </div>
 {% endblock %}
 
-{% block help %}
-<div class="help-block">
-    <h3>ℹ️ Справка: настройка проекта</h3>
-    <p>Страница собрана по шагам — двигайтесь сверху вниз по пронумерованным блокам. Сначала задайте <b>основные параметры</b> (URL, язык статьи, бренд). Затем <b>(1)</b> загрузите частотку — файл с колонками «ключ» и «частотность»; ключи сами разложатся по ролям. <b>(2)</b> Выберите стратегию — в её названии показаны вид безанкора и проценты по ролям; тип кампании (прогоны или крауд+сабмиты) определяется именно стратегией. <b>(3)</b> Задайте объём — общее число ссылок на URL.</p>
-    <p>Когда все три шага отмечены галочками, блок <b>(4) Генерация</b> станет «готов» — открывайте «Превью результата» для проверки и «К генерации» для выгрузки в Excel. Каждый блок сохраняется своей кнопкой независимо, поэтому можно менять что-то одно, не трогая остальное.</p>
-    <p>Анкоры внутренних страниц (app, login, bonus и т.п.) вынесены в раздел «Внутренние страницы» — там для каждого проекта задаётся язык и соответствие «тип страницы → URL-путь».</p>
-</div>
+{% block help_text %}
+<p>Двигайтесь по пронумерованным блокам: <b>(1)</b> загрузите частотку, <b>(2)</b> выберите стратегию (в названии видны вид безанкора и проценты ролей), <b>(3)</b> задайте объём. Каждый блок сохраняется своей кнопкой независимо.</p>
+<p>Когда все шаги отмечены галочками, открывайте «Превью» или скачивайте Excel. Анкоры внутренних страниц — в разделе «Внутренние страницы».</p>
 {% endblock %}

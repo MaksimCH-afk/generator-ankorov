@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -32,9 +33,26 @@ from .service import (
     anchorless_summary,
     generate_project_sheets,
     profile_example,
+    profile_segments,
     project_breakdown,
     strategy_label,
+    strategy_segments,
 )
+
+
+def _lang_label(language: str) -> str:
+    return language if language else "без языка"
+
+
+def _project_view(p: Project) -> dict:
+    """Presentation data for a project card (segments, labels)."""
+    return {
+        "obj": p,
+        "strategy_name": p.strategy.name if p.strategy else "—",
+        "lang_label": _lang_label(p.language),
+        "segments": strategy_segments(p.strategy) if p.strategy else [],
+        "breakdown": [],
+    }
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -91,6 +109,7 @@ def dashboard(request: Request, db: Session = Depends(get_db), msg: str = "", er
         {
             "request": request,
             "projects": projects,
+            "project_views": [_project_view(p) for p in projects],
             "progress": {p.id: _project_progress(p) for p in projects},
             "strategies": db.query(Strategy).order_by(Strategy.id).all(),
             "article_languages": ARTICLE_LANGUAGES,
@@ -113,6 +132,8 @@ def strategies_page(request: Request, db: Session = Depends(get_db), error: str 
             "obj": s,
             "roles": json.loads(s.roles_json),
             "anchorless": anchorless_summary(s),
+            "profile_name": s.anchorless_profile.name if s.anchorless_profile else "100% голый URL",
+            "segments": strategy_segments(s),
         })
     return templates.TemplateResponse(
         "strategies.html",
@@ -202,7 +223,12 @@ def profiles_page(request: Request, db: Session = Depends(get_db), error: str = 
     profiles = db.query(AnchorlessProfile).order_by(AnchorlessProfile.id).all()
     parsed = []
     for p in profiles:
-        parsed.append({"obj": p, "formats": json.loads(p.items_json or "[]"), "example": profile_example(p)})
+        parsed.append({
+            "obj": p,
+            "formats": json.loads(p.items_json or "[]"),
+            "example": profile_example(p),
+            "segments": profile_segments(p),
+        })
     return templates.TemplateResponse(
         "profiles.html",
         {"request": request, "profiles": parsed, "active": "profiles", "error": error, "msg": msg},
@@ -609,13 +635,20 @@ def generate_page(request: Request, db: Session = Depends(get_db), msg: str = ""
     projects = db.query(Project).order_by(Project.id).all()
     strategies = db.query(Strategy).order_by(Strategy.id).all()
     strategy_options = [{"id": s.id, "label": strategy_label(s)} for s in strategies]
+    gen_views = []
+    for p in projects:
+        pr = _project_progress(p)
+        gen_views.append({
+            "obj": p,
+            "ready": pr["ready"],
+            "segments": strategy_segments(p.strategy) if p.strategy else [],
+            "breakdown": project_breakdown(db, p),
+        })
     return templates.TemplateResponse(
         "generate.html",
         {
             "request": request,
-            "projects": projects,
-            "progress": {p.id: _project_progress(p) for p in projects},
-            "breakdowns": {p.id: project_breakdown(db, p) for p in projects},
+            "gen_views": gen_views,
             "strategy_options": strategy_options,
             "article_languages": ARTICLE_LANGUAGES,
             "seo_specialists": SEO_SPECIALISTS,
@@ -698,8 +731,14 @@ def export_project(pid: int, db: Session = Depends(get_db)):
     )
 
 
+# Short-lived store for generated files awaiting download (modal flow).
+_GENERATED: dict[str, dict] = {}
+
+
 @app.post("/generate")
 async def generate(request: Request, db: Session = Depends(get_db)):
+    """Generate workbooks, stash them under a token and return a JSON summary.
+    The frontend shows a success modal and downloads via /generate/download/{token}."""
     form = await request.form()
     pids = [int(x) for x in form.getlist("project_ids")]
     export_format = form.get("export_format", "separate")
@@ -707,10 +746,11 @@ async def generate(request: Request, db: Session = Depends(get_db)):
     seo_specialist = (form.get("seo_specialist") or "").strip()
     grouped = form.get("group_mode") == "group"
     if not pids:
-        return RedirectResponse("/generate?error=Выберите хотя бы один проект.", status_code=303)
+        return JSONResponse({"error": "Выберите хотя бы один проект."}, status_code=400)
 
     projects = db.query(Project).filter(Project.id.in_(pids)).all()
     files: dict[str, bytes] = {}
+    results = []
     for project in projects:
         sheets = generate_project_sheets(db, project)
         if not sheets:
@@ -719,33 +759,55 @@ async def generate(request: Request, db: Session = Depends(get_db)):
             sheets, sprint=sprint, seo_specialist=seo_specialist, language=project.language or "",
             grouped=grouped,
         )
+        links = sum(r.link_qty for rows in sheets.values() for r in rows)
+        results.append({
+            "file": safe_filename(project.url),
+            "links": links,
+            "lang": project.language or "—",
+        })
         _record_history(db, project, export_format, sheets)
         log_event(db, "INFO", "generate", f"Сгенерирован {project.url}",
                   f"Стратегия: {project.strategy.name if project.strategy else '—'}, "
-                  f"формат: {export_format}, вкладки: {', '.join(sheets)}")
+                  f"формат: {export_format}, строки: {'группировка' if grouped else 'развёрнуто'}")
     db.commit()
 
     if not files:
         log_event(db, "WARNING", "generate", "Генерация без результата",
-                  "У выбранных проектов нет данных: задайте стратегию, объёмы и загрузите частотку.")
-        return RedirectResponse("/generate?error=Нет данных для генерации. "
-                                "Проверьте стратегию, объёмы и частотку у выбранных проектов.",
-                                status_code=303)
+                  "У выбранных проектов нет данных: задайте стратегию, объём и загрузите частотку.")
+        return JSONResponse({"error": "Нет данных для генерации. Проверьте стратегию, объём и частотку."},
+                            status_code=400)
 
-    # Single project, or user chose separate files but only one resulted -> .xlsx
+    token = uuid.uuid4().hex
+    # single .xlsx unless ZIP requested or several files
     if len(files) == 1 and export_format != "zip":
         filename, content = next(iter(files.items()))
-        return Response(
-            content=content,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
+        media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        filename, content, media = "anchor-plans.zip", build_zip(files), "application/zip"
+    _GENERATED[token] = {"filename": filename, "content": content, "media": media}
+    # keep the store small
+    if len(_GENERATED) > 20:
+        for k in list(_GENERATED)[:-20]:
+            _GENERATED.pop(k, None)
 
-    zip_bytes = build_zip(files)
+    return JSONResponse({
+        "token": token,
+        "count": len(results),
+        "total": sum(r["links"] for r in results),
+        "results": results,
+        "download_label": "ZIP-архив" if filename.endswith(".zip") else "файл",
+        "sprint": sprint,
+    })
+
+
+@app.get("/generate/download/{token}")
+def download_generated(token: str):
+    data = _GENERATED.pop(token, None)
+    if not data:
+        return RedirectResponse("/generate?error=Файл устарел, сгенерируйте заново.", status_code=303)
     return Response(
-        content=zip_bytes,
-        media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="anchor-plans.zip"'},
+        content=data["content"], media_type=data["media"],
+        headers={"Content-Disposition": f'attachment; filename="{data["filename"]}"'},
     )
 
 

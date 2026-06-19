@@ -74,6 +74,48 @@ def anchorless_summary(strategy: Strategy) -> str:
     return f"безанкор: {parts}"
 
 
+# Distribution-bar colours (mirrors the design): anchorless grey + purple shades.
+_SEG_COLORS = ["#7C3AED", "#9B6BF0", "#B79AF5", "#CFBCF7"]
+_SEG_ANCHORLESS = "#C2C7D0"
+
+
+def strategy_segments(strategy: Strategy) -> list[dict]:
+    """Segments for a strategy distribution bar: anchorless + each role."""
+    roles = json.loads(strategy.roles_json or "[]")
+    segs = [{
+        "label": "безанкор",
+        "pct": float(strategy.anchorless_percent),
+        "color": _SEG_ANCHORLESS,
+    }]
+    for i, r in enumerate(roles):
+        segs.append({
+            "label": r["name"],
+            "pct": float(r["percent"]),
+            "color": _SEG_COLORS[i % len(_SEG_COLORS)],
+        })
+    return segs
+
+
+def _render_sample(template: str) -> str:
+    return template.format(url="https://site.com/", domain="site.com")
+
+
+def profile_segments(profile: AnchorlessProfile) -> list[dict]:
+    """Segments for an anchorless profile bar (relative weights, normalised)."""
+    items = json.loads(profile.items_json or "[]")
+    total = sum(float(i.get("percent", 0)) for i in items) or 1
+    segs = []
+    for i, it in enumerate(items):
+        pct = float(it.get("percent", 0)) / total * 100
+        segs.append({
+            "label": it.get("name") or it["template"],
+            "sample": _render_sample(it["template"]),
+            "pct": round(pct),
+            "color": _SEG_COLORS[0] if i == 0 else _SEG_COLORS[1],
+        })
+    return segs
+
+
 def profile_example(profile: AnchorlessProfile, sample: int = 100,
                     url: str = "https://betalice.com/") -> list[dict]:
     """Show how a profile splits ``sample`` anchorless links for an example URL."""

@@ -1,48 +1,15 @@
 {% extends "base.html" %}
+{% from "_macros.html" import bar, legend %}
 {% block page_title %}Безанкорные профили{% endblock %}
+{% block subtitle %}Как доля безанкора дробится между голым URL и голым доменом.{% endblock %}
+
 {% block content %}
-<div class="page-head">
-    <div>
-        <h1>Безанкорные профили</h1>
-        <div class="sub">Как доля безанкора дробится по форматам. Плейсхолдеры: <span class="mono">{url}</span> (полный URL, <span class="mono">https://site.com/</span>) и <span class="mono">{domain}</span> (голый домен, <span class="mono">site.com</span>). Проценты задают пропорцию между форматами.</div>
-    </div>
+<div class="row-actions" style="margin-bottom:18px">
+    <button type="button" onclick="newProfile()">＋ Создать профиль</button>
 </div>
 
-<div class="card">
-    <h2>Сохранённые профили</h2>
-    {% for p in profiles %}
-    <div class="card" style="background:var(--surface-2)">
-        <div class="row-actions" style="justify-content:space-between">
-            <div>
-                <b>{{ p.obj.name }}</b> {% if p.obj.is_builtin %}<span class="badge gray">базовый</span>{% endif %}
-                <div style="margin-top:6px">{% for it in p.formats %}<span class="pill accent">{{ it.name or it.template }} — {{ it.percent }}%</span>{% endfor %}</div>
-            </div>
-            <div class="row-actions">
-                <button type="button" class="btn-sec btn-sm"
-                    onclick='editProfile({{ p.obj.id }}, {{ p.obj.name|tojson }}, {{ p.formats|tojson }})'>Изменить</button>
-                <form method="post" action="/profiles/{{ p.obj.id }}/delete" style="display:inline" onsubmit="return confirm('Удалить профиль?')">
-                    <button class="btn-danger btn-sm" type="submit">Удалить</button>
-                </form>
-            </div>
-        </div>
-        <div class="spacer"></div>
-        <div class="muted" style="font-size:12.5px;margin-bottom:6px">Пример для 100 безанкорных ссылок (домен <span class="mono">betalice.com</span>):</div>
-        <div class="table-wrap">
-        <table>
-            <thead><tr><th>Формат</th><th>Как выглядит</th><th class="num">Ссылок</th><th class="num">Доля</th></tr></thead>
-            <tbody>
-            {% for e in p.example %}
-            <tr><td>{{ e.name }}</td><td class="mono">{{ e.example }}</td><td class="num">{{ e.count }}</td><td class="num">{{ e.percent }}%</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        </div>
-    </div>
-    {% endfor %}
-</div>
-
-<div class="card" id="profile-card">
-    <h2>Создать / редактировать профиль</h2>
+<div class="card" id="profile-card" style="display:none">
+    <div class="card-title">Создать / редактировать профиль</div>
     <form method="post" action="/profiles/save" id="profile-form">
         <input type="hidden" name="id" id="profile-id">
         <div class="field" style="max-width:420px"><label>Название</label><input name="name" id="profile-name" required></div>
@@ -50,53 +17,73 @@
         <div id="items"></div>
         <div class="spacer"></div>
         <div class="row-actions">
-            <button type="button" class="btn-sec btn-sm" onclick="addItem()">+ Добавить формат</button>
+            <button type="button" class="btn-sec btn-sm" onclick="addItem()">+ Формат</button>
             <button type="button" class="btn-ghost btn-sm" onclick="addItem('Голый URL','{url}',60)">+ Голый URL</button>
             <button type="button" class="btn-ghost btn-sm" onclick="addItem('Голый домен','{domain}',15)">+ Голый домен</button>
         </div>
         <hr>
         <div class="row-actions">
             <button type="submit">Сохранить</button>
-            <button type="button" class="btn-ghost" onclick="resetProfileForm()">Очистить</button>
+            <button type="button" class="btn-ghost" onclick="document.getElementById('profile-card').style.display='none'">Отмена</button>
         </div>
     </form>
 </div>
 
+<div class="stack">
+    {% for p in profiles %}
+    <div class="card">
+        <div class="row-actions" style="justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+            <div style="min-width:0">
+                <div class="row-actions" style="gap:9px;margin-bottom:4px">
+                    <span style="font-size:17px;font-weight:700;color:var(--text)">{{ p.obj.name }}</span>
+                    {% if p.obj.is_builtin %}<span class="badge gray">базовый</span>{% endif %}
+                </div>
+                <div style="font-size:12.5px;color:var(--muted-2)">Пример на 100 безанкорных ссылок (домен site.com)</div>
+            </div>
+            <div class="row-actions" style="flex:none">
+                <button type="button" class="btn-sec btn-sm"
+                    onclick='editProfile({{ p.obj.id }}, {{ p.obj.name|tojson }}, {{ p.formats|tojson }})'>Изменить</button>
+                <form method="post" action="/profiles/{{ p.obj.id }}/delete" style="display:inline" onsubmit="return confirm('Удалить профиль?')">
+                    <button class="btn-danger btn-sm" type="submit">Удалить</button>
+                </form>
+            </div>
+        </div>
+        {{ bar(p.segments, lg=true) }}
+        {{ legend(p.segments, show_sample=true) }}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block help_text %}
+<p>Профиль задаёт, в каком виде показываются безанкорные ссылки — <b>голый URL</b> (<span class="mono">https://site.com/</span>) или <b>голый домен</b> (<span class="mono">site.com</span>) — и в какой пропорции. Полоса и пример показывают результат сразу.</p>
+<p>Проценты — относительные веса (60 и 15 → пропорция 60:15). Профиль выбирается внутри стратегии. Базовые профили можно менять.</p>
+{% endblock %}
+
+{% block scripts %}
 <script>
-function itemRow(name, tpl, percent) {
-    const div = document.createElement('div');
-    div.className = 'inline';
-    div.style.marginBottom = '8px';
-    div.innerHTML = `
-        <input name="item_name" placeholder="название (напр. Голый URL)" value="${name||''}">
+function itemRow(name, tpl, percent){
+    const div=document.createElement('div'); div.className='inline'; div.style.marginBottom='8px';
+    div.innerHTML=`<input name="item_name" placeholder="название" value="${name||''}">
         <input name="item_template" class="mono" placeholder="{url} или {domain}" value="${tpl||''}">
         <input class="narrow" name="item_percent" type="number" step="0.1" placeholder="%" value="${percent!==undefined?percent:''}">
         <button type="button" class="btn-danger btn-sm narrow" onclick="this.parentElement.remove()">✕</button>`;
     return div;
 }
-function addItem(name, tpl, percent) { document.getElementById('items').appendChild(itemRow(name, tpl, percent)); }
-function resetProfileForm() {
-    document.getElementById('profile-id').value = '';
-    document.getElementById('profile-name').value = '';
-    document.getElementById('items').innerHTML = '';
-    addItem('Голый URL', '{url}', 100);
+function addItem(name, tpl, percent){ document.getElementById('items').appendChild(itemRow(name, tpl, percent)); }
+function newProfile(){
+    document.getElementById('profile-id').value='';
+    document.getElementById('profile-name').value='';
+    document.getElementById('items').innerHTML='';
+    addItem('Голый URL','{url}',100);
+    const c=document.getElementById('profile-card'); c.style.display='block'; c.scrollIntoView({behavior:'smooth'});
 }
-function editProfile(id, name, items) {
-    document.getElementById('profile-id').value = id;
-    document.getElementById('profile-name').value = name;
-    document.getElementById('items').innerHTML = '';
-    items.forEach(i => addItem(i.name, i.template, i.percent));
-    document.getElementById('profile-card').scrollIntoView({behavior: 'smooth'});
+function editProfile(id, name, items){
+    document.getElementById('profile-id').value=id;
+    document.getElementById('profile-name').value=name;
+    document.getElementById('items').innerHTML='';
+    items.forEach(i=>addItem(i.name, i.template, i.percent));
+    const c=document.getElementById('profile-card'); c.style.display='block'; c.scrollIntoView({behavior:'smooth'});
 }
-resetProfileForm();
 </script>
-{% endblock %}
-
-{% block help %}
-<div class="help-block">
-    <h3>ℹ️ Справка: безанкорные профили</h3>
-    <p>Безанкор — это ссылка, где анкором служит сам адрес. Профиль задаёт, в каком виде эти ссылки будут выглядеть и в какой пропорции. Доступны два формата-кирпичика: <b>голый URL</b> (<span class="mono">{url}</span> → https://site.com/) и <b>голый домен</b> (<span class="mono">{domain}</span> → site.com). По умолчанию есть три готовых профиля: «100% Голый URL», смесь URL+домен и смесь домен+URL — посмотрите их примеры ниже.</p>
-    <p>Это работает так же, как «Стратегии»: вы создаёте и сохраняете именованные профили, а затем выбираете нужный на странице каждого проекта. Проценты — это <b>относительные веса</b>: если задать 60 и 15, ссылки разделятся в пропорции 60:15 (последний формат забирает остаток округления, чтобы сумма точно сошлась). Для каждого профиля показан живой пример на 100 ссылок.</p>
-    <p>Чтобы сделать свой профиль — нажмите «+ Голый URL» / «+ Голый домен» (или «+ Добавить формат» для произвольного шаблона), укажите проценты и сохраните. Базовые профили помечены меткой «базовый», но их тоже можно менять.</p>
-</div>
 {% endblock %}

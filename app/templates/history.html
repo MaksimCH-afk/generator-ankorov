@@ -1,31 +1,29 @@
 {% extends "base.html" %}
 {% block page_title %}История{% endblock %}
+{% block subtitle %}Все прошедшие генерации: проект, язык, стратегия, объём, формат и число ссылок.{% endblock %}
+
 {% block content %}
-<div class="page-head">
-    <div>
-        <h1>История генераций</h1>
-        <div class="count">{{ records|length }} записей</div>
-    </div>
+<div class="row-actions" style="justify-content:space-between;margin-bottom:16px">
+    <div class="muted"><b style="color:var(--text)">{{ records|length }}</b> записей</div>
     {% if records %}
     <form method="post" action="/history/clear" onsubmit="return confirm('Очистить всю историю?')">
-        <button class="btn-danger" type="submit">Очистить историю</button>
+        <button class="btn-danger btn-sm" type="submit">Очистить историю</button>
     </form>
     {% endif %}
 </div>
 
-<div class="card">
+<div class="card flush">
     {% if records %}
     <div class="table-wrap">
     <table>
-        <thead><tr><th>Когда</th><th>Проект</th><th>Бренд</th><th>Язык</th><th>Стратегия</th><th class="num">Объём</th><th>Формат</th><th>Вкладки</th><th class="num">Всего ссылок</th></tr></thead>
+        <thead><tr><th>Когда</th><th>Проект</th><th>Язык</th><th>Стратегия</th><th class="num">Объём</th><th>Формат</th><th>Вкладки</th><th class="num">Ссылок</th></tr></thead>
         <tbody>
         {% for r in records %}
             <tr>
                 <td class="ts">{{ r.obj.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
                 <td class="mono">{{ r.obj.project_url }}</td>
-                <td>{{ r.obj.brand or '—' }}</td>
                 <td>{{ r.obj.language or '—' }}</td>
-                <td>{{ r.obj.strategy_name }}</td>
+                <td><span class="badge purple">{{ r.obj.strategy_name }}</span></td>
                 <td class="num">{{ r.obj.volume }}</td>
                 <td>{% if r.obj.export_format=='zip' %}<span class="badge purple">ZIP</span>{% else %}<span class="badge gray">Excel</span>{% endif %}</td>
                 <td>{% for name, s in r.sheets.items() %}<span class="pill">{{ name }}: {{ s.links }}</span>{% endfor %}</td>
@@ -36,16 +34,12 @@
     </table>
     </div>
     {% else %}
-    <p class="muted">История пуста. Она заполнится автоматически после первой генерации.</p>
+    <div style="padding:22px 24px"><p class="muted" style="margin:0">История пуста. Она заполнится после первой генерации.</p></div>
     {% endif %}
 </div>
 {% endblock %}
 
-{% block help %}
-<div class="help-block">
-    <h3>ℹ️ Справка: история</h3>
-    <p>Сюда автоматически сохраняется каждая генерация: какой проект был выгружен, по какой стратегии, с какими объёмами «Прогоны» и «Крауд», в каком формате (ZIP или раздельные Excel) и сколько всего ссылок получилось. Если в одной выгрузке было несколько проектов — для каждого создаётся отдельная запись.</p>
-    <p>Это удобно, чтобы вспомнить, что и когда вы генерировали, и воспроизвести параметры. Колонка «Вкладки» показывает разбивку по типам кампаний с числом ссылок в каждой. Записи отсортированы от новых к старым.</p>
-    <p>Кнопка «Очистить историю» удаляет все записи без возможности восстановления — само действие очистки фиксируется в «Логах».</p>
-</div>
+{% block help_text %}
+<p>Сюда автоматически сохраняется каждая генерация и быстрая выгрузка проекта: проект, язык, стратегия, объём, формат и число ссылок по вкладкам. Если в одной выгрузке было несколько проектов — для каждого своя запись.</p>
+<p>«Очистить историю» удаляет все записи без восстановления; сам факт очистки фиксируется в «Логах».</p>
 {% endblock %}

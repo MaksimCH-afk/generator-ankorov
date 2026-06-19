@@ -1,39 +1,27 @@
 {% extends "base.html" %}
 {% block page_title %}Логи{% endblock %}
+{% block subtitle %}Журнал событий: импорт, генерации, правки, выгрузки и ошибки.{% endblock %}
+
 {% block content %}
-<div class="page-head">
-    <div>
-        <h1>Логи</h1>
-        <div class="count">{{ logs|length }} записей{% if logs|length == 500 %} (показаны последние 500){% endif %}</div>
-    </div>
+<div class="row-actions" style="justify-content:space-between;margin-bottom:16px">
+    <form method="get" action="/logs" class="row-actions">
+        <select name="level" onchange="this.form.submit()" style="width:auto">
+            <option value="">Все уровни</option>
+            {% for lv in levels %}<option value="{{ lv }}" {{ 'selected' if sel_level==lv }}>{{ lv }}</option>{% endfor %}
+        </select>
+        <select name="category" onchange="this.form.submit()" style="width:auto">
+            <option value="">Все категории</option>
+            {% for c in categories %}<option value="{{ c }}" {{ 'selected' if sel_category==c }}>{{ c }}</option>{% endfor %}
+        </select>
+    </form>
     {% if logs %}
     <form method="post" action="/logs/clear" onsubmit="return confirm('Очистить все логи?')">
-        <button class="btn-danger" type="submit">Очистить логи</button>
+        <button class="btn-danger btn-sm" type="submit">Очистить логи</button>
     </form>
     {% endif %}
 </div>
 
-<div class="card">
-    <form method="get" action="/logs" class="inline" style="margin-bottom:4px">
-        <div class="narrow">
-            <label>Уровень</label>
-            <select name="level" onchange="this.form.submit()">
-                <option value="">Все</option>
-                {% for lv in levels %}<option value="{{ lv }}" {{ 'selected' if sel_level==lv }}>{{ lv }}</option>{% endfor %}
-            </select>
-        </div>
-        <div class="narrow">
-            <label>Категория</label>
-            <select name="category" onchange="this.form.submit()">
-                <option value="">Все</option>
-                {% for c in categories %}<option value="{{ c }}" {{ 'selected' if sel_category==c }}>{{ c }}</option>{% endfor %}
-            </select>
-        </div>
-        <noscript><button type="submit" class="narrow">Фильтр</button></noscript>
-    </form>
-</div>
-
-<div class="card">
+<div class="card flush">
     {% if logs %}
     <div class="table-wrap">
     <table>
@@ -41,27 +29,23 @@
         <tbody>
         {% for l in logs %}
             <tr>
-                <td class="ts">{{ l.created_at.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                <td class="ts">{{ l.created_at.strftime('%d.%m %H:%M:%S') }}</td>
                 <td><span class="log-level log-{{ l.level }}">{{ l.level }}</span></td>
-                <td><span class="pill">{{ l.category }}</span></td>
+                <td style="color:var(--accent-2);font-weight:600">{{ l.category }}</td>
                 <td>{{ l.message }}</td>
-                <td class="log-details">{{ l.details }}</td>
+                <td class="muted-2" style="font-size:12.5px">{{ l.details }}</td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
     </div>
     {% else %}
-    <p class="muted">Логи пусты или ничего не найдено по фильтру.</p>
+    <div style="padding:22px 24px"><p class="muted" style="margin:0">Логи пусты или ничего не найдено по фильтру.</p></div>
     {% endif %}
 </div>
 {% endblock %}
 
-{% block help %}
-<div class="help-block">
-    <h3>ℹ️ Справка: логи</h3>
-    <p>Здесь фиксируются действия в системе: импорт проектов из Excel (с указанием, какой лист в какой проект попал), загрузка частоток, создание и изменение проектов, сохранение стратегий и безанкорных профилей, а также генерации. Это первое место, куда стоит заглянуть, если «ничего не произошло»: например, при импорте тут видно, какие листы пропущены и почему.</p>
-    <p>Уровни: <b>INFO</b> — обычные события, <b>WARNING</b> — предупреждения (файл не распознан, нет данных), <b>ERROR</b> — ошибки. Используйте фильтры по уровню и категории сверху, чтобы быстро найти нужное. Записи идут от новых к старым.</p>
-    <p>Кнопка «Очистить логи» удаляет историю событий. Сам факт очистки тоже записывается — как отметка о том, что журнал был обнулён.</p>
-</div>
+{% block help_text %}
+<p>Здесь фиксируются действия: импорт проектов из Excel, загрузка частоток, правки проектов/стратегий/профилей, генерации и выгрузки, ошибки. Первое место, куда заглянуть, если «ничего не произошло» (напр. какой лист при импорте пропущен и почему).</p>
+<p>Уровни: <b>INFO</b> — обычные события, <b>WARNING</b> — предупреждения, <b>ERROR</b> — ошибки. Фильтруйте по уровню и категории.</p>
 {% endblock %}

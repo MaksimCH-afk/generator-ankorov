@@ -1,24 +1,22 @@
 {% extends "base.html" %}
 {% block page_title %}Превью{% endblock %}
-{% block content %}
-<div class="page-head">
-    <div>
-        <h1>Превью: {{ project.url }}</h1>
-        <div class="sub">Предпросмотр строк по вкладкам перед скачиванием.{% if not include_language %} Язык статьи исключён из выгрузки.{% endif %}</div>
-    </div>
-    <div class="row-actions">
-        <a class="btn btn-sec" href="/projects/{{ project.id }}">← К проекту</a>
-        <a class="btn" href="/generate">К генерации</a>
-    </div>
+{% block head_title %}Превью: {{ project.url }}{% endblock %}
+{% block subtitle %}Предпросмотр строк по вкладкам.{% if not include_language %} Язык статьи исключён из выгрузки.{% endif %}{% endblock %}
+{% block head_actions %}
+<div class="row-actions">
+    <a class="btn btn-sec" href="/projects/{{ project.id }}">← К проекту</a>
+    <a class="btn" href="/generate">К генерации</a>
 </div>
+{% endblock %}
 
+{% block content %}
 {% if not sheets %}
 <div class="card"><p class="muted">Нет данных. Задайте стратегию/объём и загрузите частотку.</p></div>
 {% endif %}
 
 {% for name, rows in sheets.items() %}
-<div class="card">
-    <h2>{{ name }} <span class="badge purple">всего ссылок: {{ totals[name] }}</span></h2>
+<div class="card flush">
+    <div class="card-head"><div class="card-title" style="margin:0">{{ name }} <span class="badge purple">всего ссылок: {{ totals[name] }}</span></div></div>
     <div class="table-wrap">
     <table>
         <thead><tr><th class="num">Link Q-ty</th><th>URL</th><th>Anchor</th>{% if include_language %}<th>Article Language</th>{% endif %}<th>Keyword</th></tr></thead>
@@ -39,11 +37,7 @@
 {% endfor %}
 {% endblock %}
 
-{% block help %}
-<div class="help-block">
-    <h3>ℹ️ Справка: превью</h3>
-    <p>Это предпросмотр того, что попадёт в Excel — ровно те же строки, разбитые по вкладкам. Основная вкладка называется «Прогоны» (полный профиль анкоров) или «Крауд+сабмиты» (100% безанкор) — в зависимости от выбранной стратегии. Отдельная вкладка «Внутренние страницы» — по одной строке-анкору на каждую страницу.</p>
-    <p>Проверьте, что сумма в столбце «Link Q-ty» совпадает с заданным объёмом (бейдж «всего ссылок» показывает итог по вкладке) и что анкоры выглядят корректно. Если язык статьи скрыт — значит у проекта выбрано «Не указывать в выгрузке», и колонки «Article Language» в финальном файле не будет.</p>
-    <p>Если что-то не так — вернитесь «К проекту», поправьте стратегию, объёмы или частотку и снова откройте превью. Когда всё устраивает, переходите «К генерации» для скачивания.</p>
-</div>
+{% block help_text %}
+<p>Предпросмотр распределения по вкладкам: основная («Прогоны» или «Крауд+сабмиты» — по стратегии) и «Внутренние страницы». Здесь показано компактно с количеством; в самом Excel одна строка = одна ссылка (или группировка с Link Q-ty, если выбрано на генерации).</p>
+<p>Проверьте, что суммы совпадают с объёмом, и переходите к генерации.</p>
 {% endblock %}

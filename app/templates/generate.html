@@ -1,134 +1,195 @@
 {% extends "base.html" %}
+{% from "_macros.html" import bar, legend %}
 {% block page_title %}Генерация{% endblock %}
+{% block subtitle %}Выберите проекты и формат — соберём Excel и запишем в Историю.{% endblock %}
+
 {% block content %}
-<div class="page-head">
-    <div>
-        <h1>Генерация</h1>
-        <div class="sub">Выберите проекты и формат выгрузки.</div>
-    </div>
-</div>
-
-<form method="post" action="/generate">
+<form id="gen-form">
     <div class="card">
-        <h2>Параметры выгрузки</h2>
-        <div class="grid grid-3">
-            <div class="field">
+        <div class="card-title">Параметры выгрузки</div>
+        <div class="grid grid-4">
+            <div>
                 <label>Sprint</label>
-                <input name="sprint" placeholder="напр. 122">
-                <div class="help-text">Одно значение на весь файл.</div>
+                <input name="sprint" id="f-sprint" placeholder="напр. 122">
             </div>
-            <div class="field">
+            <div>
                 <label>SEO Specialist</label>
-                <select name="seo_specialist">
-                    {% for s in seo_specialists %}
-                    <option value="{{ s }}" {{ 'selected' if loop.first }}>{{ s }}</option>
-                    {% endfor %}
+                <select name="seo_specialist" id="f-seo">
+                    {% for s in seo_specialists %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
                 </select>
             </div>
-            <div class="field">
+            <div>
                 <label>Формат выгрузки</label>
-                <select name="export_format">
-                    <option value="separate" selected>Раздельные Excel-файлы</option>
-                    <option value="zip">ZIP-архив (все файлы)</option>
+                <select name="export_format" id="f-format">
+                    <option value="separate">Раздельные Excel-файлы</option>
+                    <option value="zip">Один ZIP-архив</option>
                 </select>
             </div>
-            <div class="field">
+            <div>
                 <label>Строки</label>
-                <select name="group_mode">
-                    <option value="expand" selected>Одна строка = одна ссылка</option>
-                    <option value="group">Сгруппировать (столбец «Link Q-ty»)</option>
+                <select name="group_mode" id="f-group">
+                    <option value="expand">Одна строка = одна ссылка</option>
+                    <option value="group">Сгруппировать (Link Q-ty)</option>
                 </select>
-                <div class="help-text">Группировка: один анкор = одна строка + колонка количества.</div>
             </div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="table-wrap">
-        <table>
-            <thead><tr>
-                <th style="width:40px"><input type="checkbox" onclick="toggleAll(this)" checked></th>
-                <th>URL</th>
-                <th style="min-width:260px">Стратегия</th>
-                <th class="num" style="width:90px">Объём</th>
-                <th style="min-width:150px">Язык статьи</th>
-                <th class="num">Ключей</th>
-                <th>Готовность</th>
-            </tr></thead>
-            <tbody>
-            {% for p in projects %}
-                {% set pr = progress[p.id] %}
-                <tr>
-                    <td><input type="checkbox" name="project_ids" value="{{ p.id }}" {{ 'checked' if pr.ready }}></td>
-                    <td class="mono">{{ p.url }}</td>
-                    <td>
-                        <select onchange="setStrategy({{ p.id }}, this.value)">
-                            <option value="">— выбрать стратегию —</option>
-                            {% for o in strategy_options %}
-                            <option value="{{ o.id }}" {{ 'selected' if p.strategy_id==o.id }}>{{ o.label }}</option>
-                            {% endfor %}
-                        </select>
-                    </td>
-                    <td class="num"><input type="number" min="0" value="{{ p.volume }}" style="width:80px;text-align:right"
-                        onchange="setVolume({{ p.id }}, this.value)"></td>
-                    <td>
-                        <select onchange="setLang({{ p.id }}, this.value)">
-                            {% for lang in article_languages %}
-                            <option value="{{ lang }}" {{ 'selected' if p.language==lang }}>{{ lang }}</option>
-                            {% endfor %}
-                            <option value="" {{ 'selected' if not p.language }}>— Не указывать —</option>
-                        </select>
-                    </td>
-                    <td class="num">{{ p.keywords|length }}</td>
-                    <td>{% if pr.ready %}<span class="badge green">Готов</span>{% else %}<span class="badge amber">Не настроен</span>{% endif %}</td>
-                </tr>
-                {% if breakdowns[p.id] %}
-                <tr class="breakdown-row">
-                    <td></td>
-                    <td colspan="6">
-                        <details>
-                            <summary class="muted" style="cursor:pointer">Распределение анкоров ({{ p.keywords|length }} ключей) — какой анкор в каком %</summary>
-                            <div class="table-wrap" style="margin-top:8px">
-                            <table>
-                                <thead><tr><th>Анкор</th><th class="num">Ссылок</th><th class="num">Доля</th></tr></thead>
-                                <tbody>
-                                {% for b in breakdowns[p.id] %}
-                                <tr><td class="mono">{{ b.anchor }}</td><td class="num">{{ b.count }}</td><td class="num">{{ b.percent }}%</td></tr>
-                                {% endfor %}
-                                </tbody>
-                            </table>
-                            </div>
-                        </details>
-                    </td>
-                </tr>
-                {% endif %}
-            {% endfor %}
-            </tbody>
-        </table>
-        </div>
-
-        {% if not projects %}<p class="muted">Нет проектов. Создайте их в разделе «Проекты».</p>{% endif %}
+    <div class="selectall">
+        <input type="checkbox" id="select-all" checked onchange="toggleAll(this)">
+        <span>Выбрать все · выбрано <b id="sel-count">0</b></span>
     </div>
 
-    <button type="submit">⬇ Сгенерировать и скачать</button>
+    <div class="stack">
+        {% for v in gen_views %}
+        {% set p = v.obj %}
+        <div class="item-card gen-item" id="card-{{ p.id }}">
+            <div class="item-head">
+                <input type="checkbox" name="project_ids" value="{{ p.id }}" data-volume="{{ p.volume if v.ready else 0 }}"
+                       {{ 'checked' if v.ready }} onchange="recount()">
+                <div class="item-url mono">{{ p.url }}</div>
+                {% if v.ready %}<span class="badge green">Готов · {{ p.keywords|length }} кл.</span>
+                {% else %}<span class="badge amber">Не настроен · {{ p.keywords|length }} кл.</span>{% endif %}
+            </div>
+
+            <div class="item-controls">
+                <div class="grow">
+                    <select class="ctl" onchange="setStrategy({{ p.id }}, this.value)">
+                        <option value="">— выбрать стратегию —</option>
+                        {% for o in strategy_options %}<option value="{{ o.id }}" {{ 'selected' if p.strategy_id==o.id }}>{{ o.label }}</option>{% endfor %}
+                    </select>
+                </div>
+                <input class="ctl" type="number" min="0" value="{{ p.volume }}" title="Объём" style="width:90px;text-align:center"
+                       onchange="setVolume({{ p.id }}, this.value)">
+                <select class="ctl" title="Язык статьи" style="width:160px" onchange="setLang({{ p.id }}, this.value)">
+                    {% for lang in article_languages %}<option value="{{ lang }}" {{ 'selected' if p.language==lang }}>{{ lang }}</option>{% endfor %}
+                    <option value="" {{ 'selected' if not p.language }}>— Не указывать —</option>
+                </select>
+            </div>
+
+            {% if v.segments %}
+                {{ bar(v.segments) }}
+                <div class="row-actions" style="justify-content:space-between;align-items:flex-start">
+                    {{ legend(v.segments) }}
+                    {% if v.breakdown %}<button type="button" class="btn-link" onclick="toggleDist({{ p.id }})">Показать анкоры ▾</button>{% endif %}
+                </div>
+                {% if v.breakdown %}
+                <div class="dist" id="dist-{{ p.id }}" style="display:none">
+                    <div class="dist-grid dist-head">
+                        <div>Анкор</div><div class="num">Ссылок</div><div class="num">Доля</div>
+                    </div>
+                    {% for b in v.breakdown %}
+                    <div class="dist-grid dist-row">
+                        <div class="mono">{{ b.anchor }}</div><div class="num">{{ b.count }}</div><div class="num">{{ b.percent }}%</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="help-text">Выберите стратегию и задайте объём, чтобы увидеть распределение.</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        {% if not gen_views %}<div class="card"><p class="muted">Нет проектов. Создайте их в разделе «Проекты».</p></div>{% endif %}
+    </div>
 </form>
 
-<script>
-function toggleAll(cb) { document.querySelectorAll('input[name="project_ids"]').forEach(i => i.checked = cb.checked); }
-function post(url, body) {
-    return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: body});
-}
-function setStrategy(pid, val) { post('/projects/' + pid + '/strategy', 'strategy_id=' + encodeURIComponent(val)).then(() => location.reload()); }
-function setVolume(pid, val) { post('/projects/' + pid + '/volume', 'volume=' + encodeURIComponent(val) + '&next=/generate').then(() => location.reload()); }
-function setLang(pid, val) { post('/projects/' + pid + '/language', 'language=' + encodeURIComponent(val)).then(() => location.reload()); }
-</script>
+<!-- success modal -->
+<div class="modal-overlay" id="gen-modal" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-top">
+            <div class="modal-check">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#1BA45A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="modal-title">Выгрузка готова</div>
+            <div class="modal-sub" id="modal-sub"></div>
+        </div>
+        <div class="modal-body" id="modal-files"></div>
+        <div class="modal-foot">
+            <a class="btn" id="modal-download" style="flex:1" href="#">⬇ Скачать <span id="modal-dl-label"></span></a>
+            <button type="button" class="btn-sec" onclick="document.getElementById('gen-modal').classList.remove('open')">Закрыть</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
-{% block help %}
-<div class="help-block">
-    <h3>ℹ️ Справка: генерация</h3>
-    <p>Финальный шаг. В блоке <b>«Параметры выгрузки»</b> задайте <b>Sprint</b> (одно значение на весь файл), <b>SEO Specialist</b> (по умолчанию Miles Nashwood) и формат (по умолчанию — раздельные Excel-файлы). В таблице для каждого проекта прямо на месте выберите <b>стратегию</b>, задайте <b>объём</b> (любое число — 50, 100, 200, 1000…) и <b>язык статьи</b>; изменения применяются сразу.</p>
-    <p>Раскрывайте <b>«Распределение анкоров»</b> под проектом, чтобы увидеть, какой анкор сколько ссылок получит и в каком проценте — это та же разбивка, что попадёт в Excel. Отметьте галочками нужные проекты и нажмите «Сгенерировать».</p>
-    <p>Колонки Excel: Sprint, SEO Specialist, Project (домен), Project Url (страница размещения), URL Type, Link Type, Anchor Type, Anchor, Keyword и Article Language. По умолчанию <b>одна строка = одна ссылка</b> (459 ссылок → 459 строк). В поле «Строки» можно выбрать <b>группировку</b> — тогда один анкор = одна строка с колонкой <b>Link Q-ty</b> (459 в одной ячейке). Каждая генерация сохраняется в «Историю», детали — в «Логи».</p>
+{% block action_bar %}
+<div class="action-bar">
+    <div class="action-inner">
+        <div class="action-stats">
+            <div class="action-stat"><span class="v" id="bar-count">0</span> <span class="l">проектов выбрано</span></div>
+            <div class="action-sep"></div>
+            <div class="action-stat"><span class="v accent" id="bar-links">0</span> <span class="l">ссылок к выгрузке</span></div>
+        </div>
+        <button type="button" class="btn-cta" id="gen-btn" onclick="runGenerate()">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Сгенерировать и скачать
+        </button>
+    </div>
 </div>
+{% endblock %}
+
+{% block help_text %}
+<p>Выберите проекты и при необходимости поменяйте <b>стратегию</b>, <b>объём</b> и <b>язык</b> прямо в карточке — изменения сохраняются сразу. Полоса показывает распределение; «Показать анкоры» раскрывает, какой анкор сколько ссылок получит.</p>
+<p>В «Параметрах выгрузки» задайте <b>Sprint</b>, <b>SEO Specialist</b>, формат (раздельные Excel / ZIP) и режим строк (одна строка = одна ссылка или группировка с колонкой Link Q-ty). Снизу всегда видно, сколько ссылок уйдёт в выгрузку. Кнопка «Сгенерировать и скачать» собирает файлы и пишет запись в Историю.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function post(url, body){ return fetch(url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body}); }
+function setStrategy(pid, v){ post('/projects/'+pid+'/strategy', 'strategy_id='+encodeURIComponent(v)).then(()=>location.reload()); }
+function setVolume(pid, v){ post('/projects/'+pid+'/volume', 'volume='+encodeURIComponent(v)+'&next=/generate').then(()=>location.reload()); }
+function setLang(pid, v){ post('/projects/'+pid+'/language', 'language='+encodeURIComponent(v)).then(()=>location.reload()); }
+function toggleDist(pid){ const e=document.getElementById('dist-'+pid); e.style.display = e.style.display==='none' ? 'block' : 'none'; }
+
+function recount(){
+    let n=0, links=0;
+    document.querySelectorAll('input[name="project_ids"]').forEach(cb=>{
+        const card=document.getElementById('card-'+cb.value);
+        if(cb.checked){ n++; links += parseInt(cb.dataset.volume||'0',10)||0; card.style.opacity=''; }
+        else { card.style.opacity='.5'; }
+    });
+    document.getElementById('sel-count').textContent=n;
+    document.getElementById('bar-count').textContent=n;
+    document.getElementById('bar-links').textContent=links;
+    const all=document.querySelectorAll('input[name="project_ids"]');
+    const sa=document.getElementById('select-all');
+    if(sa) sa.checked = all.length>0 && [...all].every(c=>c.checked);
+}
+function toggleAll(cb){ document.querySelectorAll('input[name="project_ids"]').forEach(c=>c.checked=cb.checked); recount(); }
+
+// persist export params across reloads (inline edits reload the page)
+const PARAMS=['f-sprint','f-seo','f-format','f-group'];
+function saveParams(){ PARAMS.forEach(id=>{const e=document.getElementById(id); if(e) localStorage.setItem('gen_'+id, e.value);}); }
+function restoreParams(){ PARAMS.forEach(id=>{const e=document.getElementById(id); const v=localStorage.getItem('gen_'+id); if(e&&v!==null) e.value=v;}); }
+PARAMS.forEach(id=>{const e=document.getElementById(id); if(e) e.addEventListener('change', saveParams);});
+
+function runGenerate(){
+    const btn=document.getElementById('gen-btn');
+    const data=new FormData(document.getElementById('gen-form'));
+    if(![...data.keys()].includes('project_ids')){ alert('Выберите хотя бы один проект.'); return; }
+    btn.disabled=true; btn.style.opacity='.7';
+    fetch('/generate', {method:'POST', body:new URLSearchParams(data)})
+        .then(r=>r.json())
+        .then(d=>{
+            btn.disabled=false; btn.style.opacity='';
+            if(d.error){ alert(d.error); return; }
+            document.getElementById('modal-sub').innerHTML = '<b style="color:#6D28D9">'+d.total+'</b> ссылок · '+d.count+' проектов'+(d.sprint?' · Sprint '+d.sprint:'')+' · записано в Историю';
+            const box=document.getElementById('modal-files'); box.innerHTML='';
+            d.results.forEach(g=>{
+                box.insertAdjacentHTML('beforeend',
+                    '<div class="modal-file"><div class="modal-file-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 2h8l4 4v16H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v4h4" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>'+
+                    '<div style="flex:1;min-width:0"><div class="mono" style="font-size:12.5px;font-weight:600;color:#1B1E24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+g.file+'</div>'+
+                    '<div style="font-size:11.5px;color:#9097A2">'+g.links+' ссылок · '+g.lang+'</div></div><span style="font-size:12px;color:#9097A2">.xlsx</span></div>');
+            });
+            document.getElementById('modal-dl-label').textContent=d.download_label;
+            document.getElementById('modal-download').href='/generate/download/'+d.token;
+            document.getElementById('gen-modal').classList.add('open');
+        })
+        .catch(()=>{ btn.disabled=false; btn.style.opacity=''; alert('Ошибка генерации.'); });
+}
+function closeModal(e){ if(e.target.id==='gen-modal') document.getElementById('gen-modal').classList.remove('open'); }
+
+document.addEventListener('DOMContentLoaded', ()=>{ restoreParams(); recount(); });
+</script>
 {% endblock %}

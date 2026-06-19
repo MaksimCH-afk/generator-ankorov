@@ -1,0 +1,15 @@
+{% macro bar(segments, lg=false) %}
+<div class="bar {{ 'lg' if lg }}">
+    {% for s in segments %}<div class="bar-seg" style="width:{{ s.pct }}%;background:{{ s.color }}" title="{{ s.label }} {{ s.pct }}%"></div>{% endfor %}
+</div>
+{% endmacro %}
+
+{% macro legend(segments, show_sample=false) %}
+<div class="legend">
+    {% for s in segments %}
+    <span class="legend-item">
+        <span class="legend-dot" style="background:{{ s.color }}"></span>{{ s.label }}{% if show_sample and s.sample %} <span class="sample mono">{{ s.sample }}</span>{% endif %} <span class="pct">{{ s.pct }}%</span>
+    </span>
+    {% endfor %}
+</div>
+{% endmacro %}

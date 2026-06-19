@@ -1,51 +1,26 @@
 {% extends "base.html" %}
+{% from "_macros.html" import bar, legend %}
 {% block page_title %}Проекты{% endblock %}
+{% block subtitle %}Импортированные домены с частотками. Импорт из Excel или ручное создание.{% endblock %}
+
 {% block content %}
-<div class="page-head">
-    <div>
-        <h1>Проекты</h1>
-        <div class="count">{{ projects|length }} проектов</div>
-    </div>
-    <a class="btn" href="/generate">⬇ Перейти к генерации</a>
+<div class="row-actions" style="margin-bottom:18px">
+    <button type="button" onclick="togglePanel('import-panel')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Импорт из Excel
+    </button>
+    <button type="button" class="btn-sec" onclick="togglePanel('create-panel')">＋ Проект</button>
+    <div style="flex:1"></div>
+    <input id="proj-search" placeholder="Поиск по домену…" style="width:240px" oninput="filterProjects(this.value)">
 </div>
 
-<div class="card">
-    <h2>Новый проект</h2>
-    <form method="post" action="/projects/create">
-        <div class="grid grid-3">
-            <div class="field"><label>URL домена</label><input name="url" placeholder="https://betalice.com/" required></div>
-            <div class="field">
-                <label>Язык статьи</label>
-                <select name="language">
-                    {% for lang in article_languages %}
-                    <option value="{{ lang }}" {{ 'selected' if lang=='English' }}>{{ lang }}</option>
-                    {% endfor %}
-                    <option value="">— Не указывать в выгрузке —</option>
-                </select>
-            </div>
-            <div class="field">
-                <label>Бренд <span class="muted">(необязательно)</span></label>
-                <input name="brand" placeholder="betalice">
-                <div class="help-text">Нужен только для анкоров внутренних страниц. Без бренда проект тоже работает.</div>
-            </div>
-        </div>
-        <button type="submit">Создать проект</button>
-    </form>
-</div>
-
-<div class="card">
-    <h2>Импорт проектов из Excel</h2>
+<div class="card" id="import-panel" style="display:none">
+    <div class="card-title">Импорт проектов из Excel</div>
     <p class="help-text" style="margin-top:0;margin-bottom:12px">
-        Загрузите один Excel — и сразу создадутся (или обновятся) несколько проектов. <b>Одна вкладка = один проект</b>, и на вкладке есть всё: ключи, частотность и домен.
-    </p>
-    <ul class="help-text" style="margin-top:0;margin-bottom:12px;padding-left:18px">
-        <li><b>Колонки</b> распознаются по названиям-синонимам (Keyword/Ключ/Запрос, Volume/Частотность и т.п.) и могут стоять в любом порядке. Колонка KD / Keyword Difficulty игнорируется.</li>
-        <li><b>Домен</b> ищется автоматически — в заголовке, отдельной колонке или в каждой строке. Адрес вида <span class="mono">http://site.at/</span> приводится к <span class="mono">https://site.at/</span>.</li>
-        <li>Проект ищется по домену: если такого нет — создаётся новый, если есть — обновляется его частотка.</li>
-        <li><b>Пустые</b> вкладки и <b>сводные/дашборд</b>-листы (без ключей и доменов) просто пропускаются.</li>
-    </ul>
-    <p class="help-text" style="margin-top:0;margin-bottom:12px">
-        Можно загрузить сразу несколько файлов. Подробный результат по каждой вкладке — на странице «Логи».
+        Один Excel — несколько проектов. <b>Одна вкладка = один проект</b> (ключи + частотность + домен на вкладке).
+        Колонки распознаются по синонимам в любом порядке, KD игнорируется, домен находится автоматически
+        (<span class="mono">http→https</span>), пустые и сводные листы пропускаются. Проект ищется по домену:
+        нет — создаётся, есть — обновляется. Результат по каждой вкладке — на странице «Логи».
     </p>
     <form method="post" action="/projects/batch-keywords" enctype="multipart/form-data" class="inline">
         <input type="file" name="files" multiple accept=".csv,.xlsx,.xlsm">
@@ -53,54 +28,82 @@
     </form>
 </div>
 
-<div class="card">
-    <div class="row-actions" style="justify-content:space-between">
-        <h2 style="margin-bottom:0">Все проекты</h2>
-        {% if projects %}
-        <form method="post" action="/projects/delete-all" onsubmit="return confirm('Удалить ВСЕ проекты? Это действие необратимо.')">
-            <button class="btn-danger btn-sm" type="submit">Удалить все проекты</button>
-        </form>
+<div class="card" id="create-panel" style="display:none">
+    <div class="card-title">Новый проект</div>
+    <form method="post" action="/projects/create">
+        <div class="grid grid-3">
+            <div class="field"><label>URL домена</label><input name="url" placeholder="https://betalice.com/" required></div>
+            <div class="field">
+                <label>Язык статьи</label>
+                <select name="language">
+                    {% for lang in article_languages %}<option value="{{ lang }}" {{ 'selected' if lang=='English' }}>{{ lang }}</option>{% endfor %}
+                    <option value="">— Не указывать в выгрузке —</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Бренд <span style="text-transform:none;font-weight:500;color:var(--muted-2)">(необязательно)</span></label>
+                <input name="brand" placeholder="betalice">
+                <div class="help-text">Нужен только для анкоров внутренних страниц.</div>
+            </div>
+        </div>
+        <button type="submit">Создать проект</button>
+    </form>
+</div>
+
+{% if project_views %}
+<div class="stack" id="proj-list">
+    {% for v in project_views %}
+    {% set p = v.obj %}{% set pr = progress[p.id] %}
+    <div class="item-card" data-domain="{{ p.url|lower }}">
+        <div class="item-head">
+            <div style="flex:1;min-width:0">
+                <div style="font-size:14px;font-weight:700;color:#1B1E24">{{ p.url|replace('https://','')|replace('http://','')|replace('/','') }}</div>
+                <div class="mono" style="font-size:11.5px;color:var(--muted-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.url }}</div>
+            </div>
+            <span class="badge purple">{{ v.strategy_name }}</span>
+            <span style="font-size:12.5px;color:var(--muted)">{{ p.keywords|length }} кл. · {{ p.volume }} · {{ v.lang_label }}</span>
+            {% if pr.ready %}<span class="badge green">Готов</span>{% else %}<span class="badge amber">Не настроен</span>{% endif %}
+        </div>
+        {% if v.segments %}
+            {{ bar(v.segments) }}
+            <div class="row-actions" style="justify-content:space-between;align-items:flex-start">
+                {{ legend(v.segments) }}
+                <div class="row-actions" style="flex:none">
+                    {% if pr.ready %}<a class="btn btn-soft btn-sm" href="/projects/{{ p.id }}/export">⬇ Выгрузить</a>{% endif %}
+                    <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}">Открыть</a>
+                </div>
+            </div>
+        {% else %}
+            <div class="row-actions" style="justify-content:flex-end">
+                <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}">Открыть</a>
+            </div>
         {% endif %}
     </div>
-    <div class="spacer"></div>
-    {% if projects %}
-    <div class="table-wrap">
-    <table>
-        <thead><tr><th>Проект</th><th>Бренд</th><th>Стратегия</th><th class="num">Объём</th><th class="num">Ключей</th><th>Готовность</th><th></th></tr></thead>
-        <tbody>
-        {% for p in projects %}
-            {% set pr = progress[p.id] %}
-            <tr>
-                <td><a href="/projects/{{ p.id }}" class="mono">{{ p.url }}</a></td>
-                <td>{{ p.brand or '—' }}</td>
-                <td>{{ p.strategy.name if p.strategy else '—' }}</td>
-                <td class="num">{{ p.volume }}</td>
-                <td class="num">{{ p.keywords|length }}</td>
-                <td>
-                    {% if pr.ready %}<span class="badge green">Готов</span>
-                    {% else %}<span class="badge amber">Не настроен</span>{% endif %}
-                </td>
-                <td class="actions right row-actions">
-                    {% if pr.ready %}<a class="btn btn-sm" href="/projects/{{ p.id }}/export">⬇ Excel</a>{% endif %}
-                    <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}/preview">Превью</a>
-                    <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}">Настроить</a>
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
-    {% else %}
-    <p class="muted">Пока нет проектов. Создайте первый в блоке выше.</p>
-    {% endif %}
+    {% endfor %}
 </div>
+<div class="row-actions" style="justify-content:flex-end;margin-top:16px">
+    <form method="post" action="/projects/delete-all" onsubmit="return confirm('Удалить ВСЕ проекты? Необратимо.')">
+        <button class="btn-danger btn-sm" type="submit">Удалить все проекты</button>
+    </form>
+</div>
+{% else %}
+<div class="card"><p class="muted">Пока нет проектов. Импортируйте из Excel или создайте вручную выше.</p></div>
+{% endif %}
 {% endblock %}
 
-{% block help %}
-<div class="help-block">
-    <h3>ℹ️ Справка: с чего начать</h3>
-    <p>Эта страница — список ваших <b>проектов</b> (доменов). Один проект = один домен, для которого мы рассчитаем план размещения ссылок и выгрузим Excel. Начните с кнопки «Создать проект»: укажите URL домена, выберите язык статьи (или «Не указывать в выгрузке», если язык в финальном файле не нужен) и бренд (он подставляется в анкоры внутренних страниц).</p>
-    <p>Можно действовать двумя путями. <b>Вручную:</b> создать проект, затем на его странице загрузить частотку, выбрать стратегию и задать объёмы. <b>Массово:</b> через «Импорт проектов из Excel» — один файл, где каждая вкладка содержит ключи, частотность и домен; проекты создадутся автоматически (а дальше останется только выбрать стратегию и объёмы).</p>
-    <p>Колонка «Готовность» подсказывает, какие проекты уже можно генерировать. Когда всё настроено, переходите в раздел <b>«Генерация»</b>, отмечайте нужные проекты и скачивайте результат в ZIP или отдельными Excel-файлами.</p>
-</div>
+{% block help_text %}
+<p>Список ваших <b>проектов</b> (доменов). Массовый путь — «Импорт из Excel»: один файл, где каждая вкладка содержит ключи, частотность и домен; проекты создадутся сами. Ручной путь — «＋ Проект».</p>
+<p>Полоса под проектом показывает распределение ссылок по выбранной стратегии. Готовый проект (есть частотка, стратегия и объём) можно сразу выгрузить в Excel кнопкой «Выгрузить». «Открыть» ведёт к настройке проекта по шагам.</p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePanel(id){ const e=document.getElementById(id); e.style.display = e.style.display==='none' ? 'block' : 'none'; }
+function filterProjects(q){
+    q=(q||'').toLowerCase();
+    document.querySelectorAll('#proj-list .item-card').forEach(c=>{
+        c.style.display = c.dataset.domain.includes(q) ? '' : 'none';
+    });
+}
+</script>
 {% endblock %}
