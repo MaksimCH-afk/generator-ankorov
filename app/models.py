@@ -12,9 +12,12 @@ The data model mirrors the entities in the spec (§3):
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import (
     Boolean,
     Column,
+    DateTime,
     Float,
     ForeignKey,
     Integer,
@@ -28,6 +31,41 @@ from .database import Base
 
 # Supported localisation languages for internal-page anchor suffixes (§3.6 / Q10).
 SUFFIX_LANGUAGES = ["en", "de", "pl", "tr", "pt-br"]
+
+# Preset article languages offered as a dropdown for projects (English names).
+# Empty string is used as the special "do not include in export" value.
+ARTICLE_LANGUAGES = [
+    "English",
+    "German",
+    "French",
+    "Spanish",
+    "Italian",
+    "Portuguese",
+    "Portuguese (Brazil)",
+    "Dutch",
+    "Polish",
+    "Czech",
+    "Slovak",
+    "Hungarian",
+    "Romanian",
+    "Greek",
+    "Turkish",
+    "Danish",
+    "Swedish",
+    "Norwegian",
+    "Finnish",
+    "Bulgarian",
+    "Croatian",
+    "Slovenian",
+    "Serbian",
+    "Ukrainian",
+    "Russian",
+    "Japanese",
+    "Korean",
+    "Chinese",
+    "Arabic",
+    "Hindi",
+]
 
 
 class Strategy(Base):
@@ -119,3 +157,34 @@ class Keyword(Base):
     position = Column(Integer, nullable=False, default=0)  # original file order (tie-break, §4.4)
 
     project = relationship("Project", back_populates="keywords")
+
+
+class Log(Base):
+    """A detailed application event log entry (uploads, edits, generation, errors)."""
+
+    __tablename__ = "logs"
+
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    level = Column(String, nullable=False, default="INFO")     # INFO / WARNING / ERROR
+    category = Column(String, nullable=False, default="general")  # upload / project / generate / ...
+    message = Column(String, nullable=False, default="")
+    details = Column(Text, nullable=False, default="")
+
+
+class History(Base):
+    """A record of one generated project (what / how / when), saved on generation."""
+
+    __tablename__ = "history"
+
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    project_url = Column(String, nullable=False, default="")
+    brand = Column(String, nullable=False, default="")
+    language = Column(String, nullable=False, default="")
+    strategy_name = Column(String, nullable=False, default="")
+    volume = Column(Integer, nullable=False, default=0)
+    crowd_volume = Column(Integer, nullable=False, default=0)
+    export_format = Column(String, nullable=False, default="")  # zip / separate
+    rows_total = Column(Integer, nullable=False, default=0)
+    sheets_json = Column(Text, nullable=False, default="{}")    # {sheet: {rows, links}}

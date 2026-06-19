@@ -18,9 +18,9 @@ def make_strategy_safe() -> gen.Strategy:
 
 def make_project(keywords):
     return gen.ProjectInput(
-        url="https://cowboyspin-ceska.org/",
+        url="https://betalice.com/",
         article_language="Czech",
-        brand="cowboy spin",
+        brand="betalice",
         keywords=[gen.KeywordInput(k, f, i) for i, (k, f) in enumerate(keywords)],
     )
 
@@ -112,7 +112,7 @@ def test_internal_pages():
     project.suffix_lookup = {"app": {"de": "app"}, "withdraw": {"de": "auszahlung"}}
     rows = gen.generate_internal_rows(project)
     assert rows[0].anchor == "betalice app"
-    assert rows[0].url == "https://cowboyspin-ceska.org/app/"
+    assert rows[0].url == "https://betalice.com/app/"
     assert rows[1].anchor == "betalice auszahlung"
     assert all(r.link_qty == 1 for r in rows)
 

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block page_title %}Логи{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Логи</h1>
+        <div class="count">{{ logs|length }} записей{% if logs|length == 500 %} (показаны последние 500){% endif %}</div>
+    </div>
+    {% if logs %}
+    <form method="post" action="/logs/clear" onsubmit="return confirm('Очистить все логи?')">
+        <button class="btn-danger" type="submit">Очистить логи</button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="card">
+    <form method="get" action="/logs" class="inline" style="margin-bottom:4px">
+        <div class="narrow">
+            <label>Уровень</label>
+            <select name="level" onchange="this.form.submit()">
+                <option value="">Все</option>
+                {% for lv in levels %}<option value="{{ lv }}" {{ 'selected' if sel_level==lv }}>{{ lv }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="narrow">
+            <label>Категория</label>
+            <select name="category" onchange="this.form.submit()">
+                <option value="">Все</option>
+                {% for c in categories %}<option value="{{ c }}" {{ 'selected' if sel_category==c }}>{{ c }}</option>{% endfor %}
+            </select>
+        </div>
+        <noscript><button type="submit" class="narrow">Фильтр</button></noscript>
+    </form>
+</div>
+
+<div class="card">
+    {% if logs %}
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>Время</th><th>Уровень</th><th>Категория</th><th>Событие</th><th>Детали</th></tr></thead>
+        <tbody>
+        {% for l in logs %}
+            <tr>
+                <td class="ts">{{ l.created_at.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                <td><span class="log-level log-{{ l.level }}">{{ l.level }}</span></td>
+                <td><span class="pill">{{ l.category }}</span></td>
+                <td>{{ l.message }}</td>
+                <td class="log-details">{{ l.details }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="muted">Логи пусты или ничего не найдено по фильтру.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block help %}
+<div class="help-block">
+    <h3>ℹ️ Справка: логи</h3>
+    <p>Здесь фиксируются действия в системе: загрузка частоток (включая пакетную — с указанием, какой файл к какому проекту сопоставился), создание и изменение проектов, сохранение стратегий и форматов, а также генерации. Это первое место, куда стоит заглянуть, если «ничего не произошло»: например, при пакетной загрузке тут будет видно, какие файлы не сопоставились с проектами и почему.</p>
+    <p>Уровни: <b>INFO</b> — обычные события, <b>WARNING</b> — предупреждения (файл не распознан, нет данных), <b>ERROR</b> — ошибки. Используйте фильтры по уровню и категории сверху, чтобы быстро найти нужное. Записи идут от новых к старым.</p>
+    <p>Кнопка «Очистить логи» удаляет историю событий. Сам факт очистки тоже записывается — как отметка о том, что журнал был обнулён.</p>
+</div>
+{% endblock %}

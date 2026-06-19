@@ -1,28 +1,39 @@
 {% extends "base.html" %}
+{% block page_title %}Генерация{% endblock %}
 {% block content %}
-<h1>Генерация</h1>
-<p class="sub">Выберите проекты и формат выгрузки (§6, §7).</p>
+<div class="page-head">
+    <div>
+        <h1>Генерация</h1>
+        <div class="sub">Выберите проекты и формат выгрузки (§6, §7).</div>
+    </div>
+</div>
 
 <div class="card">
     <form method="post" action="/generate">
+        <div class="table-wrap">
         <table>
-            <thead><tr><th style="width:40px"><input type="checkbox" onclick="toggleAll(this)"></th><th>URL</th><th>Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th class="num">Ключей</th></tr></thead>
+            <thead><tr><th style="width:40px"><input type="checkbox" onclick="toggleAll(this)" checked></th><th>URL</th><th>Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th class="num">Ключей</th><th>Готовность</th></tr></thead>
             <tbody>
             {% for p in projects %}
+                {% set pr = progress[p.id] %}
                 <tr>
-                    <td><input type="checkbox" name="project_ids" value="{{ p.id }}" checked></td>
+                    <td><input type="checkbox" name="project_ids" value="{{ p.id }}" {{ 'checked' if pr.ready }}></td>
                     <td class="mono">{{ p.url }}</td>
                     <td>{{ p.strategy.name if p.strategy else '—' }}</td>
                     <td class="num">{{ p.volume }}</td>
                     <td class="num">{{ p.crowd_volume }}</td>
                     <td class="num">{{ p.keywords|length }}</td>
+                    <td>{% if pr.ready %}<span class="badge green">Готов</span>{% else %}<span class="badge amber">Не настроен</span>{% endif %}</td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
+        </div>
+
+        {% if not projects %}<p class="muted">Нет проектов. Создайте их в разделе «Проекты».</p>{% endif %}
 
         <hr>
-        <div class="field" style="max-width:320px">
+        <div class="field" style="max-width:340px">
             <label>Формат выгрузки</label>
             <select name="export_format">
                 <option value="zip">ZIP-архив (все файлы)</option>
@@ -36,4 +47,13 @@
 <script>
 function toggleAll(cb) { document.querySelectorAll('input[name="project_ids"]').forEach(i => i.checked = cb.checked); }
 </script>
+{% endblock %}
+
+{% block help %}
+<div class="help-block">
+    <h3>ℹ️ Справка: генерация</h3>
+    <p>Финальный шаг. Отметьте галочками проекты, для которых нужно собрать план ссылок. Проекты со статусом <b>«Готов»</b> уже отмечены автоматически — у них есть частотка, выбрана стратегия и заданы объёмы. Проекты «Не настроен» лучше сначала донастроить на их странице, иначе вкладки в Excel получатся неполными.</p>
+    <p>Выберите формат выгрузки: <b>ZIP-архив</b> удобен, когда проектов несколько — все файлы скачаются одним архивом. <b>Раздельные Excel-файлы</b> подойдут для одного проекта. Каждый домен выгружается в отдельный файл с вкладками «Прогоны», «Крауд+сабмиты» и «Внутренние страницы».</p>
+    <p>Каждая генерация автоматически сохраняется в раздел <b>«История»</b> (что, по какой стратегии и в каком формате сгенерировано), а подробности по шагам пишутся в «Логи». Перед скачиванием можно проверить результат через кнопку «Превью» на странице проекта.</p>
+</div>
 {% endblock %}

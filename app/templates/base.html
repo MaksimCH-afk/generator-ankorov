@@ -3,25 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Генератор URL-анкоров{% endblock %}</title>
+    <title>{% block title %}HubNero · Генератор анкоров{% endblock %}</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header class="topbar">
-    <div class="brand">⚓ Генератор анкоров</div>
-    <nav>
-        <a href="/" class="{{ 'on' if active=='dashboard' }}">Проекты</a>
-        <a href="/strategies" class="{{ 'on' if active=='strategies' }}">Стратегии</a>
-        <a href="/formats" class="{{ 'on' if active=='formats' }}">Безанкорные форматы</a>
-        <a href="/suffixes" class="{{ 'on' if active=='suffixes' }}">Внутренние страницы</a>
-        <a href="/generate" class="{{ 'on' if active=='generate' }}">Генерация</a>
-    </nav>
-</header>
-<main>
-    {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
-    {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
-    {% block content %}{% endblock %}
-</main>
+<div class="layout">
+    <aside class="sidebar" id="sidebar">
+        <div class="logo">
+            <span class="logo-mark" aria-hidden="true">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="28" height="28" rx="8" fill="#7C3AED"/>
+                    <rect x="7" y="7" width="6" height="14" rx="2" fill="white"/>
+                    <rect x="15" y="7" width="6" height="14" rx="2" fill="white" opacity="0.65"/>
+                </svg>
+            </span>
+            <span class="logo-text">HubNero</span>
+        </div>
+
+        <nav class="side-nav">
+            <div class="nav-section">Генератор</div>
+            <a href="/" class="nav-link {{ 'on' if active=='dashboard' }}">Проекты</a>
+            <a href="/generate" class="nav-link {{ 'on' if active=='generate' }}">Генерация</a>
+            <a href="/history" class="nav-link {{ 'on' if active=='history' }}">История</a>
+
+            <div class="nav-section">Справочники</div>
+            <a href="/strategies" class="nav-link {{ 'on' if active=='strategies' }}">Стратегии</a>
+            <a href="/formats" class="nav-link {{ 'on' if active=='formats' }}">Безанкорные форматы</a>
+            <a href="/suffixes" class="nav-link {{ 'on' if active=='suffixes' }}">Внутренние страницы</a>
+
+            <div class="nav-section">Система</div>
+            <a href="/logs" class="nav-link {{ 'on' if active=='logs' }}">Логи</a>
+        </nav>
+    </aside>
+
+    <div class="main-wrap">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="hamburger" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Меню">☰</button>
+                <span class="crumb">{% block page_title %}HubNero{% endblock %}</span>
+            </div>
+            <div class="topbar-right">
+                <span class="clock" id="clock"></span>
+            </div>
+        </header>
+
+        <main class="content">
+            {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+            {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+
+            {% block content %}{% endblock %}
+
+            {% block help %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<script>
+function tick() {
+    const d = new Date();
+    const opts = { month: 'long', day: 'numeric' };
+    const t = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const el = document.getElementById('clock');
+    if (el) el.textContent = d.toLocaleDateString('ru-RU', opts) + ' · ' + t;
+}
+tick(); setInterval(tick, 30000);
+</script>
 <script src="/static/app.js"></script>
 </body>
 </html>

@@ -1,10 +1,15 @@
 {% extends "base.html" %}
+{% block page_title %}Безанкорные форматы{% endblock %}
 {% block content %}
-<h1>Безанкорные форматы</h1>
-<p class="sub">Доля безанкора дробится по форматам (§3.5). Плейсхолдеры: <span class="mono">{url}</span>, <span class="mono">{domain}</span>. Под-вес — % от общего объёма.</p>
+<div class="page-head">
+    <div>
+        <h1>Безанкорные форматы</h1>
+        <div class="sub">Доля безанкора дробится по форматам (§3.5). Плейсхолдеры: <span class="mono">{url}</span>, <span class="mono">{domain}</span>. Под-вес — % от общего объёма.</div>
+    </div>
+</div>
 
 <div class="card">
-    <h2 style="margin-top:0">Добавить / изменить формат</h2>
+    <h2>Добавить / изменить формат</h2>
     <form method="post" action="/formats/save">
         <input type="hidden" name="id" id="fmt-id">
         <div class="grid grid-3">
@@ -21,6 +26,8 @@
 </div>
 
 <div class="card">
+    <h2>Форматы</h2>
+    <div class="table-wrap">
     <table>
         <thead><tr><th>Позиция</th><th>Название</th><th>Шаблон</th><th>Под-вес</th><th></th></tr></thead>
         <tbody>
@@ -30,7 +37,7 @@
                 <td>{{ f.name }}</td>
                 <td class="mono">{{ f.template }}</td>
                 <td>{{ f.sub_weight }}%</td>
-                <td class="right row-actions">
+                <td class="actions right row-actions">
                     <button type="button" class="btn-sec btn-sm"
                         onclick='editFmt({{ f.id }}, {{ f.name|tojson }}, {{ f.template|tojson }}, {{ f.sub_weight }}, {{ f.position }})'>Изменить</button>
                     <form method="post" action="/formats/{{ f.id }}/delete" style="display:inline">
@@ -41,7 +48,8 @@
         {% endfor %}
         </tbody>
     </table>
-    <p class="help">Если форматов нет — 100% безанкора уходит в голый URL (§4.3).</p>
+    </div>
+    <p class="help-text">Если форматов нет — 100% безанкора уходит в голый URL (§4.3).</p>
 </div>
 
 <script>
@@ -57,4 +65,13 @@ function editFmt(id, name, tpl, weight, pos) {
     window.scrollTo({top:0,behavior:'smooth'});
 }
 </script>
+{% endblock %}
+
+{% block help %}
+<div class="help-block">
+    <h3>ℹ️ Справка: безанкорные форматы</h3>
+    <p>Безанкор — это ссылка, где анкором служит сам адрес. Чтобы профиль выглядел естественно, общую долю безанкора можно разбить на несколько форматов. Шаблон задаёт, как будет выглядеть ссылка: <span class="mono">{url}</span> подставит полный URL, <span class="mono">{domain}</span> — домен без схемы. Например, <span class="mono">[{domain}]({url})</span> даст markdown-ссылку.</p>
+    <p><b>Под-вес</b> — это доля от общего объёма ссылок (в процентах). Скажем, если безанкора 75% и вы задали «голый URL» 60% и «markdown» 15%, то они в сумме дадут те же 75%. «Позиция» определяет порядок, а последний по порядку формат забирает остаток округления, чтобы итог точно сошёлся.</p>
+    <p>Эти форматы применяются ко всем проектам при генерации. Если не задать ни одного формата, весь безанкор пойдёт одним «голым URL» — это нормальный вариант по умолчанию.</p>
+</div>
 {% endblock %}

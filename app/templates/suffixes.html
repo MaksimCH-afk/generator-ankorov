@@ -1,10 +1,15 @@
 {% extends "base.html" %}
+{% block page_title %}Внутренние страницы{% endblock %}
 {% block content %}
-<h1>Внутренние страницы: суффиксы анкоров</h1>
-<p class="sub">Справочник <span class="mono">тип страницы + язык → суффикс</span> (§3.6). Анкор = <span class="mono">{бренд} {суффикс}</span>.</p>
+<div class="page-head">
+    <div>
+        <h1>Внутренние страницы: суффиксы анкоров</h1>
+        <div class="sub">Справочник <span class="mono">тип страницы + язык → суффикс</span> (§3.6). Анкор = <span class="mono">{бренд} {суффикс}</span>.</div>
+    </div>
+</div>
 
 <div class="card">
-    <h2 style="margin-top:0">Добавить / изменить тип страницы</h2>
+    <h2>Добавить / изменить тип страницы</h2>
     <form method="post" action="/suffixes/save">
         <div class="field" style="max-width:260px"><label>Тип страницы</label><input name="page_type" id="suf-pagetype" placeholder="app / login / bonus" required></div>
         <div class="grid grid-3">
@@ -17,6 +22,8 @@
 </div>
 
 <div class="card">
+    <h2>Справочник суффиксов</h2>
+    <div class="table-wrap">
     <table>
         <thead><tr><th>Тип</th>{% for lang in languages %}<th>{{ lang }}</th>{% endfor %}<th></th></tr></thead>
         <tbody>
@@ -24,7 +31,7 @@
             <tr>
                 <td class="mono">{{ page_type }}</td>
                 {% for lang in languages %}<td>{{ langs.get(lang, '') or '—' }}</td>{% endfor %}
-                <td class="right row-actions">
+                <td class="actions right row-actions">
                     <button type="button" class="btn-sec btn-sm"
                         onclick='editSuffix({{ page_type|tojson }}, {{ langs|tojson }})'>Изменить</button>
                     <form method="post" action="/suffixes/{{ page_type }}/delete" style="display:inline">
@@ -35,6 +42,7 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 
 <script>
@@ -45,4 +53,13 @@ function editSuffix(pt, langs) {
     window.scrollTo({top:0,behavior:'smooth'});
 }
 </script>
+{% endblock %}
+
+{% block help %}
+<div class="help-block">
+    <h3>ℹ️ Справка: внутренние страницы</h3>
+    <p>Здесь хранится общий справочник анкоров для типовых внутренних страниц (app, login, bonus, withdraw, deposit и т.д.). Смысл страниц одинаков для всех проектов, но текст анкора зависит от языка. Для каждого типа страницы задаётся суффикс на каждом языке локализации (en, de, pl, tr, pt-br).</p>
+    <p>При генерации анкор внутренней страницы собирается как <b>{бренд} {суффикс}</b>. Например, для бренда «betalice», страницы «withdraw» и немецкого языка суффикс «auszahlung» даст анкор <span class="mono">betalice auszahlung</span>. Сам язык внутренних страниц выбирается отдельно на странице каждого проекта, а конкретные URL-пути (например, <span class="mono">/boni/</span>) указываются там же.</p>
+    <p>Чтобы добавить новый тип страницы — впишите его название и заполните суффиксы по языкам. Пустые поля просто не сохраняются. Этот справочник — общий, поэтому изменения отразятся во всех проектах при следующей генерации.</p>
+</div>
 {% endblock %}

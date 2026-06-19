@@ -1,10 +1,15 @@
 {% extends "base.html" %}
+{% block page_title %}Стратегии{% endblock %}
 {% block content %}
-<h1>Стратегии (профили анкоров)</h1>
-<p class="sub">Безанкор + роли ключей в процентах. Сумма всех весов должна быть 100% (§3.3, §9).</p>
+<div class="page-head">
+    <div>
+        <h1>Стратегии (профили анкоров)</h1>
+        <div class="sub">Безанкор + роли ключей в процентах. Сумма всех весов должна быть 100% (§3.3, §9).</div>
+    </div>
+</div>
 
 <div class="card">
-    <h2 style="margin-top:0">Создать / редактировать стратегию</h2>
+    <h2>Создать / редактировать стратегию</h2>
     <form method="post" action="/strategies/save" id="strategy-form">
         <input type="hidden" name="id" id="strategy-id">
         <div class="grid grid-2">
@@ -27,15 +32,17 @@
 </div>
 
 <div class="card">
+    <h2>Сохранённые стратегии</h2>
+    <div class="table-wrap">
     <table>
         <thead><tr><th>Название</th><th>Безанкор</th><th>Роли</th><th></th></tr></thead>
         <tbody>
         {% for s in strategies %}
             <tr>
-                <td>{{ s.obj.name }} {% if s.obj.is_builtin %}<span class="pill">базовая</span>{% endif %}</td>
+                <td>{{ s.obj.name }} {% if s.obj.is_builtin %}<span class="badge gray">базовая</span>{% endif %}</td>
                 <td>{{ s.obj.anchorless_percent }}%</td>
-                <td>{% for r in s.roles %}<span class="pill accent">{{ r.name }} {{ r.percent }}%</span> {% endfor %}{% if not s.roles %}<span class="muted">—</span>{% endif %}</td>
-                <td class="right row-actions">
+                <td>{% for r in s.roles %}<span class="pill accent">{{ r.name }} {{ r.percent }}%</span>{% endfor %}{% if not s.roles %}<span class="muted">—</span>{% endif %}</td>
+                <td class="actions right row-actions">
                     <button type="button" class="btn-sec btn-sm"
                         onclick='editStrategy({{ s.obj.id }}, {{ s.obj.name|tojson }}, {{ s.obj.anchorless_percent }}, {{ s.roles|tojson }})'>Изменить</button>
                     <form method="post" action="/strategies/{{ s.obj.id }}/delete" style="display:inline" onsubmit="return confirm('Удалить стратегию?')">
@@ -46,13 +53,14 @@
         {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 
 <script>
 function roleRow(name, percent) {
     const div = document.createElement('div');
     div.className = 'inline';
-    div.style.marginBottom = '0.5rem';
+    div.style.marginBottom = '8px';
     div.innerHTML = `
         <input name="role_name" placeholder="напр. основной 1" value="${name||''}">
         <input class="narrow" name="role_percent" type="number" step="0.1" placeholder="%" value="${percent!==undefined?percent:''}" oninput="recalcSum()">
@@ -86,4 +94,13 @@ function editStrategy(id, name, anchorless, roles) {
 }
 resetStrategyForm();
 </script>
+{% endblock %}
+
+{% block help %}
+<div class="help-block">
+    <h3>ℹ️ Справка: стратегии</h3>
+    <p>Стратегия — это «профиль анкоров»: какой процент ссылок идёт в <b>безанкор</b> (ссылка самим URL) и сколько на каждую <b>роль ключа</b>. Роли заполняются ключами из частотки по убыванию частотности: самый частый ключ → «основной 1», следующий → «основной 2» и так далее. Базовые стратегии «Обычная» и «Безопасная» уже созданы — их можно использовать сразу.</p>
+    <p>Чтобы создать свою: задайте название, процент безанкора и добавьте роли с их процентами. Можно добавить сколько угодно добавочных ролей (добавочный 3, 4, 5…). Главное правило — <b>сумма безанкора и всех ролей должна равняться 100%</b>; индикатор «Сумма» подсветит зелёным, когда всё сходится. При сохранении сумма проверяется автоматически.</p>
+    <p>После сохранения стратегия станет доступна в выпадающем списке на странице проекта. Базовые стратегии помечены меткой «базовая», но их тоже можно редактировать под свои нужды.</p>
+</div>
 {% endblock %}

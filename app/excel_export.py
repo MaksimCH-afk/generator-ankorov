@@ -12,36 +12,49 @@ from openpyxl.utils import get_column_letter
 from .generator import GeneratedRow
 
 COLUMNS = ["Link Q-ty", "URL", "Anchor", "Article Language", "Keyword"]
+# Columns when the Article Language parameter is excluded from the export.
+COLUMNS_NO_LANG = ["Link Q-ty", "URL", "Anchor", "Keyword"]
 
-HEADER_FILL = PatternFill(start_color="1F2937", end_color="1F2937", fill_type="solid")
+HEADER_FILL = PatternFill(start_color="7C3AED", end_color="7C3AED", fill_type="solid")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 
 
-def _write_sheet(ws, rows: list[GeneratedRow]) -> None:
-    ws.append(COLUMNS)
+def _row_values(row: GeneratedRow, include_language: bool) -> list:
+    if include_language:
+        return [row.link_qty, row.url, row.anchor, row.article_language, row.keyword]
+    return [row.link_qty, row.url, row.anchor, row.keyword]
+
+
+def _write_sheet(ws, rows: list[GeneratedRow], include_language: bool) -> None:
+    columns = COLUMNS if include_language else COLUMNS_NO_LANG
+    ws.append(columns)
     for cell in ws[1]:
         cell.fill = HEADER_FILL
         cell.font = HEADER_FONT
     for row in rows:
-        ws.append([row.link_qty, row.url, row.anchor, row.article_language, row.keyword])
+        ws.append(_row_values(row, include_language))
 
     # Auto-ish column widths.
-    widths = [len(c) for c in COLUMNS]
+    widths = [len(c) for c in columns]
     for row in rows:
-        for i, value in enumerate([row.link_qty, row.url, row.anchor, row.article_language, row.keyword]):
+        for i, value in enumerate(_row_values(row, include_language)):
             widths[i] = max(widths[i], len(str(value)))
     for i, width in enumerate(widths):
         ws.column_dimensions[get_column_letter(i + 1)].width = min(width + 4, 70)
     ws.freeze_panes = "A2"
 
 
-def build_workbook(sheets: dict[str, list[GeneratedRow]]) -> bytes:
-    """Build one .xlsx file with the given ``sheet name -> rows`` mapping."""
+def build_workbook(sheets: dict[str, list[GeneratedRow]], include_language: bool = True) -> bytes:
+    """Build one .xlsx file with the given ``sheet name -> rows`` mapping.
+
+    When ``include_language`` is False the "Article Language" column is omitted
+    from the output entirely.
+    """
     wb = Workbook()
     wb.remove(wb.active)
     for name, rows in sheets.items():
         ws = wb.create_sheet(title=_safe_sheet_name(name))
-        _write_sheet(ws, rows)
+        _write_sheet(ws, rows, include_language)
     if not wb.sheetnames:  # never leave an empty workbook
         wb.create_sheet(title="Empty")
     buffer = io.BytesIO()

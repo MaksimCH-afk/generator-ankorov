@@ -1,23 +1,37 @@
 {% extends "base.html" %}
+{% block page_title %}Проекты{% endblock %}
 {% block content %}
-<h1>Проекты</h1>
-<p class="sub">Домены для обработки. На каждый проект — частотка, стратегия и внутренние страницы.</p>
+<div class="page-head">
+    <div>
+        <h1>Проекты</h1>
+        <div class="count">{{ projects|length }} проектов</div>
+    </div>
+    <a class="btn" href="/generate">⬇ Перейти к генерации</a>
+</div>
 
 <div class="card">
-    <h2 style="margin-top:0">Новый проект</h2>
+    <h2>Новый проект</h2>
     <form method="post" action="/projects/create">
         <div class="grid grid-3">
-            <div class="field"><label>URL домена</label><input name="url" placeholder="https://site.com/" required></div>
-            <div class="field"><label>Язык статьи</label><input name="language" value="English"></div>
-            <div class="field"><label>Бренд</label><input name="brand" placeholder="cowboy spin"></div>
+            <div class="field"><label>URL домена</label><input name="url" placeholder="https://betalice.com/" required></div>
+            <div class="field">
+                <label>Язык статьи</label>
+                <select name="language">
+                    {% for lang in article_languages %}
+                    <option value="{{ lang }}" {{ 'selected' if lang=='English' }}>{{ lang }}</option>
+                    {% endfor %}
+                    <option value="">— Не указывать в выгрузке —</option>
+                </select>
+            </div>
+            <div class="field"><label>Бренд</label><input name="brand" placeholder="betalice"></div>
         </div>
         <button type="submit">Создать проект</button>
     </form>
 </div>
 
 <div class="card">
-    <h2 style="margin-top:0">Пакетная загрузка частоток</h2>
-    <p class="help">Несколько файлов сразу (§5.2). Файл сопоставляется проекту по домену в имени файла (напр. <span class="mono">cowboyspin.csv → cowboyspin-ceska.org</span>).</p>
+    <h2>Пакетная загрузка частоток</h2>
+    <p class="help-text" style="margin-top:0;margin-bottom:12px">Несколько файлов сразу (§5.2). Каждый файл — частотка одного проекта. Файл сопоставляется проекту по домену или бренду в имени файла (напр. <span class="mono">betalice.xlsx → betalice.com</span>). Результат по каждому файлу пишется в «Логи».</p>
     <form method="post" action="/projects/batch-keywords" enctype="multipart/form-data" class="inline">
         <input type="file" name="files" multiple accept=".csv,.xlsx,.xlsm">
         <button class="narrow" type="submit">Загрузить</button>
@@ -25,11 +39,14 @@
 </div>
 
 <div class="card">
+    <h2>Все проекты</h2>
     {% if projects %}
+    <div class="table-wrap">
     <table>
-        <thead><tr><th>URL</th><th>Бренд</th><th>Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th class="num">Ключей</th><th></th></tr></thead>
+        <thead><tr><th>Проект</th><th>Бренд</th><th>Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th class="num">Ключей</th><th>Готовность</th><th></th></tr></thead>
         <tbody>
         {% for p in projects %}
+            {% set pr = progress[p.id] %}
             <tr>
                 <td><a href="/projects/{{ p.id }}" class="mono">{{ p.url }}</a></td>
                 <td>{{ p.brand or '—' }}</td>
@@ -37,16 +54,30 @@
                 <td class="num">{{ p.volume }}</td>
                 <td class="num">{{ p.crowd_volume }}</td>
                 <td class="num">{{ p.keywords|length }}</td>
-                <td class="right row-actions">
+                <td>
+                    {% if pr.ready %}<span class="badge green">Готов</span>
+                    {% else %}<span class="badge amber">Не настроен</span>{% endif %}
+                </td>
+                <td class="actions right row-actions">
                     <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}/preview">Превью</a>
-                    <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}">Изменить</a>
+                    <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}">Настроить</a>
                 </td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
+    </div>
     {% else %}
-    <p class="muted">Пока нет проектов. Создайте первый выше.</p>
+    <p class="muted">Пока нет проектов. Создайте первый в блоке выше.</p>
     {% endif %}
+</div>
+{% endblock %}
+
+{% block help %}
+<div class="help-block">
+    <h3>ℹ️ Справка: с чего начать</h3>
+    <p>Эта страница — список ваших <b>проектов</b> (доменов). Один проект = один домен, для которого мы рассчитаем план размещения ссылок и выгрузим Excel. Начните с кнопки «Создать проект»: укажите URL домена, выберите язык статьи (или «Не указывать в выгрузке», если язык в финальном файле не нужен) и бренд (он подставляется в анкоры внутренних страниц).</p>
+    <p>После создания проекта вы попадёте на его страницу, где нужно <b>загрузить частотку</b> (файл «ключ; частотность»), <b>выбрать стратегию</b> распределения анкоров и задать <b>объёмы</b> ссылок. Если проектов много, удобнее залить все частотки сразу через «Пакетную загрузку» — просто назовите файлы по домену или бренду проекта.</p>
+    <p>Колонка «Готовность» подсказывает, какие проекты уже можно генерировать. Когда всё настроено, переходите в раздел <b>«Генерация»</b>, отмечайте нужные проекты и скачивайте результат в ZIP или отдельными Excel-файлами.</p>
 </div>
 {% endblock %}

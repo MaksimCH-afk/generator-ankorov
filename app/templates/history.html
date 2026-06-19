@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block page_title %}История{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>История генераций</h1>
+        <div class="count">{{ records|length }} записей</div>
+    </div>
+    {% if records %}
+    <form method="post" action="/history/clear" onsubmit="return confirm('Очистить всю историю?')">
+        <button class="btn-danger" type="submit">Очистить историю</button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="card">
+    {% if records %}
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>Когда</th><th>Проект</th><th>Бренд</th><th>Язык</th><th>Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th>Формат</th><th>Вкладки</th><th class="num">Всего ссылок</th></tr></thead>
+        <tbody>
+        {% for r in records %}
+            <tr>
+                <td class="ts">{{ r.obj.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td class="mono">{{ r.obj.project_url }}</td>
+                <td>{{ r.obj.brand or '—' }}</td>
+                <td>{{ r.obj.language or '—' }}</td>
+                <td>{{ r.obj.strategy_name }}</td>
+                <td class="num">{{ r.obj.volume }}</td>
+                <td class="num">{{ r.obj.crowd_volume }}</td>
+                <td>{% if r.obj.export_format=='zip' %}<span class="badge purple">ZIP</span>{% else %}<span class="badge gray">Excel</span>{% endif %}</td>
+                <td>{% for name, s in r.sheets.items() %}<span class="pill">{{ name }}: {{ s.links }}</span>{% endfor %}</td>
+                <td class="num">{{ r.obj.rows_total }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="muted">История пуста. Она заполнится автоматически после первой генерации.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block help %}
+<div class="help-block">
+    <h3>ℹ️ Справка: история</h3>
+    <p>Сюда автоматически сохраняется каждая генерация: какой проект был выгружен, по какой стратегии, с какими объёмами «Прогоны» и «Крауд», в каком формате (ZIP или раздельные Excel) и сколько всего ссылок получилось. Если в одной выгрузке было несколько проектов — для каждого создаётся отдельная запись.</p>
+    <p>Это удобно, чтобы вспомнить, что и когда вы генерировали, и воспроизвести параметры. Колонка «Вкладки» показывает разбивку по типам кампаний с числом ссылок в каждой. Записи отсортированы от новых к старым.</p>
+    <p>Кнопка «Очистить историю» удаляет все записи без возможности восстановления — само действие очистки фиксируется в «Логах».</p>
+</div>
+{% endblock %}
