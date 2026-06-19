@@ -43,6 +43,24 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 
+def _record_history(db: Session, project: Project, export_format: str, sheets: dict) -> None:
+    """Save a History row for one generated/exported project."""
+    sheet_summary = {name: {"rows": len(rows), "links": sum(r.link_qty for r in rows)}
+                     for name, rows in sheets.items()}
+    rows_total = sum(s["links"] for s in sheet_summary.values())
+    db.add(History(
+        project_url=project.url,
+        brand=project.brand or "",
+        language=project.language or "",
+        strategy_name=project.strategy.name if project.strategy else "—",
+        volume=project.volume or 0,
+        crowd_volume=0,
+        export_format=export_format,
+        rows_total=rows_total,
+        sheets_json=json.dumps(sheet_summary, ensure_ascii=False),
+    ))
+
+
 @app.on_event("startup")
 def _startup() -> None:
     seed()
@@ -654,6 +672,32 @@ def preview(pid: int, request: Request, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/projects/{pid}/export")
+def export_project(pid: int, db: Session = Depends(get_db)):
+    """Download a single project's Excel — the same file as on the Generate page.
+    Uses the default SEO specialist and an empty Sprint (set those on Generate
+    for a filled-in batch)."""
+    project = db.query(Project).get(pid)
+    if not project:
+        raise HTTPException(404, "Проект не найден")
+    sheets = generate_project_sheets(db, project)
+    if not sheets:
+        return RedirectResponse(f"/projects/{pid}?msg=Нет данных: задайте стратегию, объём и частотку.",
+                                status_code=303)
+    content = build_workbook(
+        sheets, sprint="", seo_specialist=SEO_SPECIALISTS[0], language=project.language or "",
+    )
+    _record_history(db, project, "separate", sheets)
+    log_event(db, "INFO", "generate", f"Выгружен (с вкладки Проекты) {project.url}",
+              f"Стратегия: {project.strategy.name if project.strategy else '—'}, объём: {project.volume}")
+    db.commit()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename(project.url)}"'},
+    )
+
+
 @app.post("/generate")
 async def generate(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
@@ -673,25 +717,10 @@ async def generate(request: Request, db: Session = Depends(get_db)):
         files[safe_filename(project.url)] = build_workbook(
             sheets, sprint=sprint, seo_specialist=seo_specialist, language=project.language or "",
         )
-
-        # Record History (§ "история": what / how / by which strategy).
-        sheet_summary = {name: {"rows": len(rows), "links": sum(r.link_qty for r in rows)}
-                         for name, rows in sheets.items()}
-        rows_total = sum(s["links"] for s in sheet_summary.values())
-        db.add(History(
-            project_url=project.url,
-            brand=project.brand or "",
-            language=project.language or "",
-            strategy_name=project.strategy.name if project.strategy else "—",
-            volume=project.volume or 0,
-            crowd_volume=0,
-            export_format=export_format,
-            rows_total=rows_total,
-            sheets_json=json.dumps(sheet_summary, ensure_ascii=False),
-        ))
+        _record_history(db, project, export_format, sheets)
         log_event(db, "INFO", "generate", f"Сгенерирован {project.url}",
                   f"Стратегия: {project.strategy.name if project.strategy else '—'}, "
-                  f"формат: {export_format}, вкладки: {', '.join(sheet_summary)}, всего ссылок: {rows_total}")
+                  f"формат: {export_format}, вкладки: {', '.join(sheets)}")
     db.commit()
 
     if not files:

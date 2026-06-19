@@ -81,6 +81,7 @@
                     {% else %}<span class="badge amber">Не настроен</span>{% endif %}
                 </td>
                 <td class="actions right row-actions">
+                    {% if pr.ready %}<a class="btn btn-sm" href="/projects/{{ p.id }}/export">⬇ Excel</a>{% endif %}
                     <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}/preview">Превью</a>
                     <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}">Настроить</a>
                 </td>

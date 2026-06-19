@@ -102,7 +102,8 @@
     {% endif %}
     <div class="row-actions">
         <a class="btn btn-sec" href="/projects/{{ project.id }}/preview">Превью результата</a>
-        <a class="btn" href="/generate">К генерации</a>
+        {% if progress.ready %}<a class="btn" href="/projects/{{ project.id }}/export">⬇ Скачать Excel</a>{% endif %}
+        <a class="btn btn-sec" href="/generate">К генерации</a>
     </div>
 </div>
 
