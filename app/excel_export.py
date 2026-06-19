@@ -15,7 +15,7 @@ COLUMNS = ["Link Q-ty", "URL", "Anchor", "Article Language", "Keyword"]
 # Columns when the Article Language parameter is excluded from the export.
 COLUMNS_NO_LANG = ["Link Q-ty", "URL", "Anchor", "Keyword"]
 
-HEADER_FILL = PatternFill(start_color="7C3AED", end_color="7C3AED", fill_type="solid")
+HEADER_FILL = PatternFill(start_color="843DCB", end_color="843DCB", fill_type="solid")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
 
 

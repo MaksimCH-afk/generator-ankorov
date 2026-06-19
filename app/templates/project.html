@@ -51,7 +51,11 @@
                     <option value="" {{ 'selected' if not project.language }}>— Не указывать в выгрузке —</option>
                 </select>
             </div>
-            <div class="field"><label>Бренд</label><input name="brand" value="{{ project.brand }}" placeholder="betalice"></div>
+            <div class="field">
+                <label>Бренд <span class="muted">(необязательно)</span></label>
+                <input name="brand" value="{{ project.brand }}" placeholder="betalice">
+                <div class="help-text">Нужен только для анкоров внутренних страниц.</div>
+            </div>
         </div>
         <div class="grid grid-3">
             <div class="field">
@@ -92,7 +96,7 @@
         <button type="button" class="btn-sec btn-sm" onclick="addInternal()">+ Страница</button>
 
         <h2 style="margin-top:18px">Перераспределение отсутствующих ролей (опционально)</h2>
-        <p class="help-text" style="margin-top:0">JSON: <span class="mono">{"добавочный 2": {"основной 1": 100}}</span>. Пусто → освободившийся % уходит в безанкор (§4.2).</p>
+        <p class="help-text" style="margin-top:0">JSON: <span class="mono">{"добавочный 2": {"основной 1": 100}}</span>. Пусто → освободившийся % уходит в безанкор.</p>
         <textarea name="redistribution_json">{{ project.redistribution_json if project.redistribution_json != '{}' else '' }}</textarea>
 
         <hr>

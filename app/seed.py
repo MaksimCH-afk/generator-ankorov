@@ -38,8 +38,10 @@ BASE_STRATEGIES = [
 ]
 
 BASE_FORMATS = [
+    # По умолчанию безанкор идёт полным URL (https://site.com/). Дополнительно —
+    # голый домен (site.com); пользователь может менять/добавлять форматы.
     {"name": "Голый URL", "template": "{url}", "sub_weight": 60, "position": 0},
-    {"name": "Markdown-ссылка", "template": "[{domain}]({url})", "sub_weight": 15, "position": 1},
+    {"name": "Голый домен", "template": "{domain}", "sub_weight": 15, "position": 1},
 ]
 
 # page_type -> {language -> suffix}. Starter set; editable on the dashboard (§3.6).
@@ -74,6 +76,18 @@ def seed() -> None:
                 for lang, suffix in langs.items():
                     db.add(InternalPageSuffix(page_type=page_type, language=lang, suffix=suffix))
         db.commit()
+
+        # Migration: the old default seeded a Markdown anchorless format, which is
+        # not wanted. Convert that untouched default into "Голый домен" ({domain}).
+        legacy = (
+            db.query(AnchorlessFormat)
+            .filter(AnchorlessFormat.template == "[{domain}]({url})", AnchorlessFormat.name == "Markdown-ссылка")
+            .first()
+        )
+        if legacy:
+            legacy.name = "Голый домен"
+            legacy.template = "{domain}"
+            db.commit()
     finally:
         db.close()
 

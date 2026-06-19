@@ -7,10 +7,10 @@
     --text: #1d1d24;
     --muted: #8a8f9c;
     --muted-2: #b3b7c2;
-    --accent: #7c3aed;
-    --accent-hover: #6d28d9;
-    --accent-soft: #f3eeff;
-    --accent-soft-2: #ede5ff;
+    --accent: #843DCB;
+    --accent-hover: #6f2fae;
+    --accent-soft: #f4ecfb;
+    --accent-soft-2: #e7d7f6;
     --green: #16a06f;
     --green-soft: #e6f7f0;
     --red: #e5484d;
@@ -50,9 +50,8 @@ a { color: var(--accent); text-decoration: none; }
     overflow-y: auto;
 }
 
-.logo { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; }
-.logo-mark { display: flex; }
-.logo-text { font-weight: 800; font-size: 18px; letter-spacing: -0.02em; }
+.logo { display: flex; align-items: center; padding: 4px 8px 18px; }
+.logo svg { display: block; }
 
 .side-nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-section {

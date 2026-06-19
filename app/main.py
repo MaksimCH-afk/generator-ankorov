@@ -25,7 +25,7 @@ from .models import (
     Project,
     Strategy,
 )
-from .parsing import parse_frequency
+from .parsing import parse_frequency, parse_workbook_sheets
 from .seed import seed
 from .service import generate_project_sheets
 
@@ -353,6 +353,16 @@ def delete_project(pid: int, db: Session = Depends(get_db)):
     return RedirectResponse("/", status_code=303)
 
 
+@app.post("/projects/delete-all")
+def delete_all_projects(db: Session = Depends(get_db)):
+    count = db.query(Project).count()
+    for project in db.query(Project).all():
+        db.delete(project)
+    db.commit()
+    log_event(db, "WARNING", "project", f"Удалены все проекты ({count})")
+    return RedirectResponse(f"/?msg=Удалено проектов: {count}", status_code=303)
+
+
 @app.post("/projects/{pid}/keywords")
 async def upload_keywords(pid: int, db: Session = Depends(get_db), file: UploadFile = None):
     project = db.query(Project).get(pid)
@@ -411,11 +421,16 @@ def _match_project(stem: str, projects: list[Project]) -> Project | None:
 
 @app.post("/projects/batch-keywords")
 async def batch_keywords(request: Request, db: Session = Depends(get_db)):
-    """Upload many frequency files at once (§5.2).
+    """Upload many частоток at once.
 
-    Each file is one project's частотка. It is matched to an existing project by
-    domain or brand found in the file name (fuzzy, case-insensitive). Detailed
-    per-file results are written to the Logs page.
+    Supports two layouts:
+    * **Excel со вкладками** — каждая вкладка = частотка одного проекта; имя
+      вкладки сопоставляется проекту по домену или бренду. В одном файле может
+      быть несколько проектов.
+    * **Отдельные файлы** (CSV/Excel) — один файл = один проект; сопоставление
+      идёт по имени файла (домен/бренд в названии).
+
+    Подробный результат по каждой вкладке/файлу пишется на страницу «Логи».
     """
     form = await request.form()
     files = [f for f in form.getlist("files") if getattr(f, "filename", "")]
@@ -423,40 +438,62 @@ async def batch_keywords(request: Request, db: Session = Depends(get_db)):
 
     if not projects:
         log_event(db, "WARNING", "upload", "Пакетная загрузка: нет проектов",
-                  "Сначала создайте проекты — файлы сопоставляются с ними по имени.")
+                  "Сначала создайте проекты — частотки сопоставляются с ними по имени вкладки/файла.")
         return RedirectResponse("/?error=Сначала создайте проекты, затем загружайте частотки пачкой.",
                                 status_code=303)
     if not files:
         return RedirectResponse("/?error=Файлы не выбраны.", status_code=303)
 
     matched, unmatched, empty = [], [], []
-    for upload in files:
-        content = await upload.read()
-        stem = os.path.splitext(os.path.basename(upload.filename))[0]
-        target = _match_project(stem, projects)
-        if target is None:
-            unmatched.append(upload.filename)
-            log_event(db, "WARNING", "upload", f"Файл не сопоставлен: {upload.filename}",
-                      "Имя файла не содержит домен или бренд ни одного проекта. "
-                      "Переименуйте файл (напр. betalice.xlsx) или загрузите его вручную в проект.")
-            continue
-        pairs = parse_frequency(upload.filename, content)
-        if not pairs:
-            empty.append(upload.filename)
-            log_event(db, "WARNING", "upload", f"Частотка пуста/не распознана: {upload.filename}",
-                      f"Проект {target.url}. Нужны колонки keyword | frequency.")
-            continue
+
+    def assign(target: Project, pairs: list[tuple[str, float]]) -> None:
         for kw in list(target.keywords):
             db.delete(kw)
         db.flush()
         for i, (keyword, freq) in enumerate(pairs):
             db.add(Keyword(project_id=target.id, keyword=keyword, frequency=freq, position=i))
         db.commit()
-        matched.append(f"{upload.filename} → {target.url} ({len(pairs)} ключей)")
-        log_event(db, "INFO", "upload", f"Пакет: {upload.filename} → {target.url}",
-                  f"Загружено ключей: {len(pairs)}")
 
-    parts = [f"Загружено: {len(matched)} из {len(files)} файлов."]
+    for upload in files:
+        content = await upload.read()
+        fname = upload.filename
+        stem = os.path.splitext(os.path.basename(fname))[0]
+        is_excel = fname.lower().endswith((".xlsx", ".xlsm"))
+
+        # Build a list of (source_label, match_key, pairs) units to assign.
+        units: list[tuple[str, str, list[tuple[str, float]]]] = []
+        if is_excel:
+            sheets = parse_workbook_sheets(content)
+            single = len(sheets) == 1
+            for sheet_name, pairs in sheets.items():
+                # Single-sheet files: allow the file name as a fallback match key.
+                match_key = sheet_name
+                if single and _match_project(sheet_name, projects) is None:
+                    match_key = stem
+                units.append((f"{fname} → вкладка «{sheet_name}»", match_key, pairs))
+        else:
+            units.append((fname, stem, parse_frequency(fname, content)))
+
+        for label, key, pairs in units:
+            target = _match_project(key, projects)
+            if target is None:
+                unmatched.append(label)
+                log_event(db, "WARNING", "upload", f"Не сопоставлено: {label}",
+                          f"Имя «{key}» не совпало с доменом или брендом ни одного проекта. "
+                          "Переименуйте вкладку/файл (напр. betalice) или загрузите частотку вручную в проект.")
+                continue
+            if not pairs:
+                empty.append(label)
+                log_event(db, "WARNING", "upload", f"Пусто/не распознано: {label}",
+                          f"Проект {target.url}. Нужны колонки: ключ в 1-й колонке, частотность во 2-й.")
+                continue
+            assign(target, pairs)
+            matched.append(f"{label} → {target.url} ({len(pairs)} ключей)")
+            log_event(db, "INFO", "upload", f"Загружено: {label} → {target.url}",
+                      f"Ключей: {len(pairs)}")
+
+    total_units = len(matched) + len(unmatched) + len(empty)
+    parts = [f"Загружено: {len(matched)} из {total_units}."]
     if unmatched:
         parts.append(f"Не сопоставлены ({len(unmatched)}): {', '.join(unmatched)}")
     if empty:
@@ -623,6 +660,12 @@ def clear_logs(db: Session = Depends(get_db)):
     db.commit()
     log_event(db, "WARNING", "logs", "Логи очищены")
     return RedirectResponse("/logs?msg=Логи очищены", status_code=303)
+
+
+@app.get("/favicon.ico")
+def favicon():
+    # Browsers probe /favicon.ico at the root; point them at the SVG icon.
+    return RedirectResponse("/static/favicon.svg", status_code=307)
 
 
 @app.get("/health")

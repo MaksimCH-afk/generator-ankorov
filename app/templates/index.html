@@ -23,7 +23,11 @@
                     <option value="">— Не указывать в выгрузке —</option>
                 </select>
             </div>
-            <div class="field"><label>Бренд</label><input name="brand" placeholder="betalice"></div>
+            <div class="field">
+                <label>Бренд <span class="muted">(необязательно)</span></label>
+                <input name="brand" placeholder="betalice">
+                <div class="help-text">Нужен только для анкоров внутренних страниц. Без бренда проект тоже работает.</div>
+            </div>
         </div>
         <button type="submit">Создать проект</button>
     </form>
@@ -31,7 +35,16 @@
 
 <div class="card">
     <h2>Пакетная загрузка частоток</h2>
-    <p class="help-text" style="margin-top:0;margin-bottom:12px">Несколько файлов сразу (§5.2). Каждый файл — частотка одного проекта. Файл сопоставляется проекту по домену или бренду в имени файла (напр. <span class="mono">betalice.xlsx → betalice.com</span>). Результат по каждому файлу пишется в «Логи».</p>
+    <p class="help-text" style="margin-top:0;margin-bottom:12px">
+        Загружайте частотки сразу для нескольких проектов. Поддерживаются два варианта:
+    </p>
+    <ul class="help-text" style="margin-top:0;margin-bottom:12px;padding-left:18px">
+        <li><b>Один Excel с вкладками</b> — каждая вкладка = частотка одного проекта. Имя вкладки сопоставляется с проектом по его <b>домену</b> или <b>бренду</b> (напр. вкладка <span class="mono">betalice</span> → проект с брендом «betalice» или доменом betalice.com). В одном файле может быть сколько угодно проектов.</li>
+        <li><b>Несколько отдельных файлов</b> (CSV или Excel) — один файл = один проект; тогда сопоставление идёт по <b>имени файла</b> (домен или бренд в названии).</li>
+    </ul>
+    <p class="help-text" style="margin-top:0;margin-bottom:12px">
+        Формат данных: в первой колонке — ключ, во второй — частотность (заголовок вроде <span class="mono">Keyword | Volume</span> распознаётся и пропускается). Загрузка заменяет текущую частотку проекта. Подробный результат по каждой вкладке/файлу — на странице «Логи».
+    </p>
     <form method="post" action="/projects/batch-keywords" enctype="multipart/form-data" class="inline">
         <input type="file" name="files" multiple accept=".csv,.xlsx,.xlsm">
         <button class="narrow" type="submit">Загрузить</button>
@@ -39,7 +52,15 @@
 </div>
 
 <div class="card">
-    <h2>Все проекты</h2>
+    <div class="row-actions" style="justify-content:space-between">
+        <h2 style="margin-bottom:0">Все проекты</h2>
+        {% if projects %}
+        <form method="post" action="/projects/delete-all" onsubmit="return confirm('Удалить ВСЕ проекты? Это действие необратимо.')">
+            <button class="btn-danger btn-sm" type="submit">Удалить все проекты</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="spacer"></div>
     {% if projects %}
     <div class="table-wrap">
     <table>
