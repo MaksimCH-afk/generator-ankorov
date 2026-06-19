@@ -17,7 +17,7 @@
     {% if records %}
     <div class="table-wrap">
     <table>
-        <thead><tr><th>Когда</th><th>Проект</th><th>Бренд</th><th>Язык</th><th>Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th>Формат</th><th>Вкладки</th><th class="num">Всего ссылок</th></tr></thead>
+        <thead><tr><th>Когда</th><th>Проект</th><th>Бренд</th><th>Язык</th><th>Стратегия</th><th class="num">Объём</th><th>Формат</th><th>Вкладки</th><th class="num">Всего ссылок</th></tr></thead>
         <tbody>
         {% for r in records %}
             <tr>
@@ -27,7 +27,6 @@
                 <td>{{ r.obj.language or '—' }}</td>
                 <td>{{ r.obj.strategy_name }}</td>
                 <td class="num">{{ r.obj.volume }}</td>
-                <td class="num">{{ r.obj.crowd_volume }}</td>
                 <td>{% if r.obj.export_format=='zip' %}<span class="badge purple">ZIP</span>{% else %}<span class="badge gray">Excel</span>{% endif %}</td>
                 <td>{% for name, s in r.sheets.items() %}<span class="pill">{{ name }}: {{ s.links }}</span>{% endfor %}</td>
                 <td class="num">{{ r.obj.rows_total }}</td>

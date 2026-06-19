@@ -120,18 +120,31 @@ def project_to_gen(db: Session, project: Project) -> gen.ProjectInput:
     )
 
 
+def is_crowd_strategy(strategy: Strategy) -> bool:
+    """A campaign of type "крауд + сабмиты" = strategy with no anchor roles
+    (everything is anchorless)."""
+    return not json.loads(strategy.roles_json or "[]")
+
+
+def main_sheet_name(strategy: Strategy) -> str:
+    return "Крауд+сабмиты" if is_crowd_strategy(strategy) else "Прогоны"
+
+
 def generate_project_sheets(db: Session, project: Project) -> dict[str, list[gen.GeneratedRow]]:
-    """Build the three campaign-type sheets for a project (§6)."""
+    """Build the sheets for a project (§6).
+
+    One volume + one strategy. The strategy decides the campaign type: a
+    strategy with anchor roles → "Прогоны", a 100%-anchorless one → "Крауд+сабмиты".
+    """
     pin = project_to_gen(db, project)
     formats = formats_for_project(db, project)
     sheets: dict[str, list[gen.GeneratedRow]] = {}
 
     if project.strategy and project.volume > 0:
         strat = strategy_to_gen(project.strategy)
-        sheets["Прогоны"] = gen.generate_profile_rows(pin, strat, project.volume, formats)
-
-    if project.crowd_volume > 0:
-        sheets["Крауд+сабмиты"] = gen.generate_crowd_rows(pin, project.crowd_volume, formats)
+        sheets[main_sheet_name(project.strategy)] = gen.generate_profile_rows(
+            pin, strat, project.volume, formats
+        )
 
     internal = gen.generate_internal_rows(pin)
     if internal:

@@ -238,18 +238,26 @@ def delete_profile(pid: int, db: Session = Depends(get_db)):
 # Internal-page suffix dictionary (§3.6)
 # --------------------------------------------------------------------------- #
 @app.get("/suffixes", response_class=HTMLResponse)
-def suffixes_page(request: Request, db: Session = Depends(get_db), msg: str = ""):
+def suffixes_page(request: Request, db: Session = Depends(get_db), msg: str = "", project: str = ""):
     entries = db.query(InternalPageSuffix).order_by(InternalPageSuffix.page_type, InternalPageSuffix.language).all()
     # Pivot into page_type -> {language -> suffix} for a tidy grid.
     grid: dict[str, dict[str, str]] = {}
     for e in entries:
         grid.setdefault(e.page_type, {})[e.language] = e.suffix
+
+    projects = db.query(Project).order_by(Project.id).all()
+    selected = db.query(Project).get(int(project)) if project else None
+    page_types = sorted(grid.keys())
     return templates.TemplateResponse(
         "suffixes.html",
         {
             "request": request,
             "grid": grid,
             "languages": SUFFIX_LANGUAGES,
+            "projects": projects,
+            "selected": selected,
+            "selected_internal": json.loads(selected.internal_pages_json or "{}") if selected else {},
+            "page_types": page_types,
             "active": "suffixes",
             "msg": msg,
         },
@@ -297,18 +305,14 @@ def project_page(pid: int, request: Request, db: Session = Depends(get_db), msg:
     project = db.query(Project).get(pid)
     if not project:
         raise HTTPException(404, "Проект не найден")
-    page_types = sorted({e.page_type for e in db.query(InternalPageSuffix).all()})
+    strategies = db.query(Strategy).order_by(Strategy.id).all()
     return templates.TemplateResponse(
         "project.html",
         {
             "request": request,
             "project": project,
-            "strategies": db.query(Strategy).order_by(Strategy.id).all(),
-            "anchorless_profiles": db.query(AnchorlessProfile).order_by(AnchorlessProfile.id).all(),
-            "languages": SUFFIX_LANGUAGES,
+            "strategy_options": [{"id": s.id, "label": strategy_label(s)} for s in strategies],
             "article_languages": ARTICLE_LANGUAGES,
-            "page_types": page_types,
-            "internal_pages": json.loads(project.internal_pages_json or "{}"),
             "keywords": project.keywords,
             "progress": _project_progress(project),
             "active": "dashboard",
@@ -331,8 +335,8 @@ def create_project(
     return RedirectResponse(f"/projects/{project.id}?msg=Проект создан", status_code=303)
 
 
-@app.post("/projects/{pid}/update")
-async def update_project(pid: int, request: Request, db: Session = Depends(get_db)):
+@app.post("/projects/{pid}/basics")
+async def update_basics(pid: int, request: Request, db: Session = Depends(get_db)):
     project = db.query(Project).get(pid)
     if not project:
         raise HTTPException(404, "Проект не найден")
@@ -341,13 +345,51 @@ async def update_project(pid: int, request: Request, db: Session = Depends(get_d
     # Empty language means "do not include in export" — keep the empty value as-is.
     project.language = (form.get("language") or "").strip()
     project.brand = (form.get("brand") or "").strip()
-    sid = form.get("strategy_id")
-    project.strategy_id = int(sid) if sid else None
-    project.volume = int(form.get("volume") or 0)
-    project.crowd_volume = int(form.get("crowd_volume") or 0)
-    project.internal_language = form.get("internal_language") or "en"
+    db.commit()
+    log_event(db, "INFO", "project", f"Обновлены параметры проекта {project.url}",
+              f"Язык: {project.language or '— не указан —'}, бренд: {project.brand or '—'}")
+    return RedirectResponse(f"/projects/{pid}?msg=Основные параметры сохранены", status_code=303)
 
-    # Internal pages: parallel page_type / path lists.
+
+@app.post("/projects/{pid}/volume")
+def update_volume(pid: int, db: Session = Depends(get_db), volume: int = Form(0)):
+    project = db.query(Project).get(pid)
+    if not project:
+        raise HTTPException(404, "Проект не найден")
+    project.volume = max(0, int(volume or 0))
+    db.commit()
+    log_event(db, "INFO", "project", f"Объём проекта {project.url} → {project.volume}")
+    return RedirectResponse(f"/projects/{pid}?msg=Объём сохранён", status_code=303)
+
+
+@app.post("/projects/{pid}/redistribution")
+def update_redistribution(pid: int, db: Session = Depends(get_db), redistribution_json: str = Form("")):
+    project = db.query(Project).get(pid)
+    if not project:
+        raise HTTPException(404, "Проект не найден")
+    raw = (redistribution_json or "").strip()
+    if raw:
+        try:
+            json.loads(raw)
+        except json.JSONDecodeError:
+            return RedirectResponse(f"/projects/{pid}?msg=Ошибка: некорректный JSON перераспределения",
+                                    status_code=303)
+        project.redistribution_json = raw
+    else:
+        project.redistribution_json = "{}"
+    db.commit()
+    return RedirectResponse(f"/projects/{pid}?msg=Перераспределение сохранено", status_code=303)
+
+
+@app.post("/projects/{pid}/internal")
+async def update_internal_pages(pid: int, request: Request, db: Session = Depends(get_db)):
+    """Per-project internal pages (language + page_type→path). Lives on the
+    "Внутренние страницы" section now."""
+    project = db.query(Project).get(pid)
+    if not project:
+        raise HTTPException(404, "Проект не найден")
+    form = await request.form()
+    project.internal_language = form.get("internal_language") or "en"
     page_types = form.getlist("ip_type")
     paths = form.getlist("ip_path")
     internal: dict[str, str] = {}
@@ -356,23 +398,10 @@ async def update_project(pid: int, request: Request, db: Session = Depends(get_d
         if pt and path:
             internal[pt] = path
     project.internal_pages_json = json.dumps(internal, ensure_ascii=False)
-
-    # Manual redistribution (optional JSON, §4.2).
-    redistribution_raw = (form.get("redistribution_json") or "").strip()
-    if redistribution_raw:
-        try:
-            json.loads(redistribution_raw)
-            project.redistribution_json = redistribution_raw
-        except json.JSONDecodeError:
-            return RedirectResponse(f"/projects/{pid}?msg=Ошибка: некорректный JSON перераспределения", status_code=303)
-    else:
-        project.redistribution_json = "{}"
-
     db.commit()
-    log_event(db, "INFO", "project", f"Сохранён проект {project.url}",
-              f"Стратегия id={project.strategy_id}, объём прогоны={project.volume}, "
-              f"крауд={project.crowd_volume}, язык={project.language or '— не указан —'}")
-    return RedirectResponse(f"/projects/{pid}?msg=Проект сохранён", status_code=303)
+    log_event(db, "INFO", "suffix", f"Внутренние страницы проекта {project.url} обновлены",
+              f"Страниц: {len(internal)}, язык: {project.internal_language}")
+    return RedirectResponse(f"/suffixes?project={pid}&msg=Внутренние страницы проекта сохранены", status_code=303)
 
 
 @app.post("/projects/{pid}/delete")
@@ -568,8 +597,9 @@ def generate_page(request: Request, db: Session = Depends(get_db), msg: str = ""
 
 
 @app.post("/projects/{pid}/strategy")
-def set_project_strategy(pid: int, db: Session = Depends(get_db), strategy_id: str = Form("")):
-    """Set a project's strategy inline from the Generate page."""
+def set_project_strategy(pid: int, db: Session = Depends(get_db),
+                         strategy_id: str = Form(""), next: str = Form("/generate")):
+    """Set a project's strategy inline (from the Generate or Project page)."""
     project = db.query(Project).get(pid)
     if not project:
         raise HTTPException(404, "Проект не найден")
@@ -577,7 +607,8 @@ def set_project_strategy(pid: int, db: Session = Depends(get_db), strategy_id: s
     db.commit()
     name = project.strategy.name if project.strategy else "—"
     log_event(db, "INFO", "project", f"Стратегия проекта {project.url} → {name}")
-    return RedirectResponse("/generate", status_code=303)
+    target = next if next.startswith("/") else "/generate"
+    return RedirectResponse(target, status_code=303)
 
 
 @app.get("/projects/{pid}/preview", response_class=HTMLResponse)
@@ -627,7 +658,7 @@ async def generate(request: Request, db: Session = Depends(get_db)):
             language=project.language or "",
             strategy_name=project.strategy.name if project.strategy else "—",
             volume=project.volume or 0,
-            crowd_volume=project.crowd_volume or 0,
+            crowd_volume=0,
             export_format=export_format,
             rows_total=rows_total,
             sheets_json=json.dumps(sheet_summary, ensure_ascii=False),

@@ -9,7 +9,57 @@
 </div>
 
 <div class="card">
-    <h2>Добавить / изменить тип страницы</h2>
+    <h2>Внутренние страницы проекта</h2>
+    <form method="get" action="/suffixes" class="inline" style="margin-bottom:4px">
+        <div style="flex:0 1 420px">
+            <label>Проект</label>
+            <select name="project" onchange="this.form.submit()">
+                <option value="">— выберите проект —</option>
+                {% for p in projects %}
+                <option value="{{ p.id }}" {{ 'selected' if selected and selected.id==p.id }}>{{ p.url }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <noscript><button type="submit" class="narrow">Открыть</button></noscript>
+    </form>
+
+    {% if selected %}
+    <form method="post" action="/projects/{{ selected.id }}/internal">
+        <div class="grid grid-3">
+            <div class="field">
+                <label>Язык анкоров внутренних страниц</label>
+                <select name="internal_language">
+                    {% for lang in languages %}
+                    <option value="{{ lang }}" {{ 'selected' if selected.internal_language==lang }}>{{ lang }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <label>Тип страницы → URL-путь</label>
+        <div id="internal-pages">
+            {% for pt, path in selected_internal.items() %}
+            <div class="inline" style="margin-bottom:8px">
+                <input name="ip_type" list="page-types" value="{{ pt }}" placeholder="app">
+                <input name="ip_path" class="mono" value="{{ path }}" placeholder="/app/">
+                <button type="button" class="btn-danger btn-sm narrow" onclick="this.parentElement.remove()">✕</button>
+            </div>
+            {% endfor %}
+        </div>
+        <datalist id="page-types">{% for pt in page_types %}<option value="{{ pt }}">{% endfor %}</datalist>
+        <div class="row-actions">
+            <button type="button" class="btn-sec btn-sm" onclick="addInternal()">+ Страница</button>
+        </div>
+        <hr>
+        <button type="submit">Сохранить внутренние страницы проекта</button>
+    </form>
+    {% else %}
+    <p class="help-text">Выберите проект, чтобы задать его внутренние страницы (язык анкоров и пути вида <span class="mono">/app/</span>).</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Суффиксы анкоров — общий справочник</h2>
+    <p class="help-text" style="margin-top:0;margin-bottom:12px">Тип страницы + язык → суффикс. Общий для всех проектов. Анкор = <span class="mono">{бренд} {суффикс}</span>.</p>
     <form method="post" action="/suffixes/save">
         <div class="field" style="max-width:260px"><label>Тип страницы</label><input name="page_type" id="suf-pagetype" placeholder="app / login / bonus" required></div>
         <div class="grid grid-3">
@@ -52,6 +102,16 @@ function editSuffix(pt, langs) {
     LANGS.forEach(l => document.getElementById('suf-' + l).value = langs[l] || '');
     window.scrollTo({top:0,behavior:'smooth'});
 }
+function addInternal() {
+    const wrap = document.getElementById('internal-pages');
+    if (!wrap) return;
+    const div = document.createElement('div');
+    div.className = 'inline'; div.style.marginBottom = '8px';
+    div.innerHTML = `<input name="ip_type" list="page-types" placeholder="app">
+        <input name="ip_path" class="mono" placeholder="/app/">
+        <button type="button" class="btn-danger btn-sm narrow" onclick="this.parentElement.remove()">✕</button>`;
+    wrap.appendChild(div);
+}
 </script>
 {% endblock %}
 
@@ -59,7 +119,7 @@ function editSuffix(pt, langs) {
 <div class="help-block">
     <h3>ℹ️ Справка: внутренние страницы</h3>
     <p>Здесь хранится общий справочник анкоров для типовых внутренних страниц (app, login, bonus, withdraw, deposit и т.д.). Смысл страниц одинаков для всех проектов, но текст анкора зависит от языка. Для каждого типа страницы задаётся суффикс на каждом языке локализации (en, de, pl, tr, pt-br).</p>
-    <p>При генерации анкор внутренней страницы собирается как <b>{бренд} {суффикс}</b>. Например, для бренда «betalice», страницы «withdraw» и немецкого языка суффикс «auszahlung» даст анкор <span class="mono">betalice auszahlung</span>. Сам язык внутренних страниц выбирается отдельно на странице каждого проекта, а конкретные URL-пути (например, <span class="mono">/boni/</span>) указываются там же.</p>
+    <p>При генерации анкор внутренней страницы собирается как <b>{бренд} {суффикс}</b>. Например, для бренда «betalice», страницы «withdraw» и немецкого языка суффикс «auszahlung» даст анкор <span class="mono">betalice auszahlung</span>. В блоке <b>«Внутренние страницы проекта»</b> сверху выберите проект, задайте язык анкоров и пропишите соответствие «тип страницы → URL-путь» (например, <span class="mono">withdraw → /boni/</span>).</p>
     <p>Чтобы добавить новый тип страницы — впишите его название и заполните суффиксы по языкам. Пустые поля просто не сохраняются. Этот справочник — общий, поэтому изменения отразятся во всех проектах при следующей генерации.</p>
 </div>
 {% endblock %}

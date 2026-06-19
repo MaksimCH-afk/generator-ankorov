@@ -66,7 +66,7 @@
     {% if projects %}
     <div class="table-wrap">
     <table>
-        <thead><tr><th>Проект</th><th>Бренд</th><th>Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th class="num">Ключей</th><th>Готовность</th><th></th></tr></thead>
+        <thead><tr><th>Проект</th><th>Бренд</th><th>Стратегия</th><th class="num">Объём</th><th class="num">Ключей</th><th>Готовность</th><th></th></tr></thead>
         <tbody>
         {% for p in projects %}
             {% set pr = progress[p.id] %}
@@ -75,7 +75,6 @@
                 <td>{{ p.brand or '—' }}</td>
                 <td>{{ p.strategy.name if p.strategy else '—' }}</td>
                 <td class="num">{{ p.volume }}</td>
-                <td class="num">{{ p.crowd_volume }}</td>
                 <td class="num">{{ p.keywords|length }}</td>
                 <td>
                     {% if pr.ready %}<span class="badge green">Готов</span>

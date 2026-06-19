@@ -13,33 +13,8 @@
 </div>
 
 <div class="card">
-    <h2>Что нужно сделать</h2>
-    <div class="steps">
-        <div class="step {{ 'done' if progress.has_keywords }}">
-            <span class="dot">{{ '✓' if progress.has_keywords else '1' }}</span>
-            <span class="txt">Загрузить частотку</span>
-        </div>
-        <div class="step {{ 'done' if progress.has_strategy }}">
-            <span class="dot">{{ '✓' if progress.has_strategy else '2' }}</span>
-            <span class="txt">Выбрать стратегию</span>
-        </div>
-        <div class="step {{ 'done' if progress.has_volume }}">
-            <span class="dot">{{ '✓' if progress.has_volume else '3' }}</span>
-            <span class="txt">Задать объёмы</span>
-        </div>
-        <div class="step {{ 'done' if progress.ready }}">
-            <span class="dot">{{ '✓' if progress.ready else '4' }}</span>
-            <span class="txt">Сгенерировать</span>
-        </div>
-    </div>
-    {% if progress.ready %}
-    <p class="help-text" style="margin-top:14px">Всё готово — нажмите «Превью результата» сверху, чтобы проверить, или перейдите «К генерации» для выгрузки.</p>
-    {% endif %}
-</div>
-
-<div class="card">
-    <h2>Параметры проекта</h2>
-    <form method="post" action="/projects/{{ project.id }}/update">
+    <h2>Основные параметры</h2>
+    <form method="post" action="/projects/{{ project.id }}/basics">
         <div class="grid grid-3">
             <div class="field"><label>URL домена</label><input name="url" value="{{ project.url }}" required></div>
             <div class="field">
@@ -57,61 +32,13 @@
                 <div class="help-text">Нужен только для анкоров внутренних страниц.</div>
             </div>
         </div>
-        <div class="grid grid-3">
-            <div class="field">
-                <label>Стратегия (прогоны)</label>
-                <select name="strategy_id">
-                    <option value="">— не выбрана —</option>
-                    {% for s in strategies %}
-                    <option value="{{ s.id }}" {{ 'selected' if project.strategy_id==s.id }}>{{ s.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="field"><label>Объём «Прогоны»</label><input name="volume" type="number" value="{{ project.volume }}"></div>
-            <div class="field"><label>Объём «Крауд+сабмиты»</label><input name="crowd_volume" type="number" value="{{ project.crowd_volume }}"></div>
-        </div>
-        <p class="help-text" style="margin-top:0">Вид безанкора (голый URL / голый домен и их пропорция) задаётся в самой стратегии — на вкладке «Стратегии».</p>
-
-        <h2 style="margin-top:18px">Внутренние страницы</h2>
-        <div class="grid grid-3">
-            <div class="field">
-                <label>Язык анкоров внутренних страниц</label>
-                <select name="internal_language">
-                    {% for lang in languages %}
-                    <option value="{{ lang }}" {{ 'selected' if project.internal_language==lang }}>{{ lang }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-        <label>Тип страницы → URL-путь</label>
-        <div id="internal-pages">
-            {% for pt, path in internal_pages.items() %}
-            <div class="inline" style="margin-bottom:8px">
-                <input name="ip_type" list="page-types" value="{{ pt }}" placeholder="app">
-                <input name="ip_path" class="mono" value="{{ path }}" placeholder="/app/">
-                <button type="button" class="btn-danger btn-sm narrow" onclick="this.parentElement.remove()">✕</button>
-            </div>
-            {% endfor %}
-        </div>
-        <datalist id="page-types">{% for pt in page_types %}<option value="{{ pt }}">{% endfor %}</datalist>
-        <button type="button" class="btn-sec btn-sm" onclick="addInternal()">+ Страница</button>
-
-        <h2 style="margin-top:18px">Перераспределение отсутствующих ролей (опционально)</h2>
-        <p class="help-text" style="margin-top:0">JSON: <span class="mono">{"добавочный 2": {"основной 1": 100}}</span>. Пусто → освободившийся % уходит в безанкор.</p>
-        <textarea name="redistribution_json">{{ project.redistribution_json if project.redistribution_json != '{}' else '' }}</textarea>
-
-        <hr>
-        <div class="row-actions">
-            <button type="submit">Сохранить проект</button>
-            <form method="post" action="/projects/{{ project.id }}/delete" style="display:inline" onsubmit="return confirm('Удалить проект?')">
-                <button class="btn-danger" type="submit">Удалить проект</button>
-            </form>
-        </div>
+        <button type="submit">Сохранить</button>
     </form>
 </div>
 
 <div class="card">
-    <h2>Частотка ({{ keywords|length }} ключей)</h2>
+    <div class="block-head"><span class="dot {{ 'done' if progress.has_keywords }}">{{ '✓' if progress.has_keywords else '1' }}</span><h2 style="margin:0">Частотка ({{ keywords|length }} ключей)</h2></div>
+    <div class="spacer"></div>
     <form method="post" action="/projects/{{ project.id }}/keywords" enctype="multipart/form-data" class="inline">
         <input type="file" name="file" accept=".csv,.xlsx,.xlsm">
         <button class="narrow" type="submit">Загрузить</button>
@@ -129,23 +56,75 @@
     {% endif %}
 </div>
 
-<script>
-function addInternal() {
-    const div = document.createElement('div');
-    div.className = 'inline'; div.style.marginBottom = '8px';
-    div.innerHTML = `<input name="ip_type" list="page-types" placeholder="app">
-        <input name="ip_path" class="mono" placeholder="/app/">
-        <button type="button" class="btn-danger btn-sm narrow" onclick="this.parentElement.remove()">✕</button>`;
-    document.getElementById('internal-pages').appendChild(div);
-}
-</script>
+<div class="card">
+    <div class="block-head"><span class="dot {{ 'done' if progress.has_strategy }}">{{ '✓' if progress.has_strategy else '2' }}</span><h2 style="margin:0">Стратегия</h2></div>
+    <div class="spacer"></div>
+    <form method="post" action="/projects/{{ project.id }}/strategy" class="inline">
+        <input type="hidden" name="next" value="/projects/{{ project.id }}">
+        <select name="strategy_id" style="min-width:320px;flex:0 1 460px">
+            <option value="">— не выбрана —</option>
+            {% for o in strategy_options %}
+            <option value="{{ o.id }}" {{ 'selected' if project.strategy_id==o.id }}>{{ o.label }}</option>
+            {% endfor %}
+        </select>
+        <button class="narrow" type="submit">Применить</button>
+    </form>
+    <p class="help-text">Стратегия задаёт профиль анкоров и вид безанкора. Тип кампании (прогоны / крауд+сабмиты) определяется выбранной стратегией. Настроить стратегии — на вкладке «Стратегии».</p>
+
+    <details style="margin-top:12px">
+        <summary class="muted" style="cursor:pointer">Перераспределение отсутствующих ролей (опционально)</summary>
+        <form method="post" action="/projects/{{ project.id }}/redistribution" style="margin-top:10px">
+            <p class="help-text" style="margin-top:0">JSON: <span class="mono">{"добавочный 2": {"основной 1": 100}}</span>. Пусто → освободившийся % уходит в безанкор.</p>
+            <textarea name="redistribution_json">{{ project.redistribution_json if project.redistribution_json != '{}' else '' }}</textarea>
+            <div class="spacer"></div>
+            <button type="submit" class="btn-sec btn-sm">Сохранить перераспределение</button>
+        </form>
+    </details>
+</div>
+
+<div class="card">
+    <div class="block-head"><span class="dot {{ 'done' if progress.has_volume }}">{{ '✓' if progress.has_volume else '3' }}</span><h2 style="margin:0">Объём</h2></div>
+    <div class="spacer"></div>
+    <form method="post" action="/projects/{{ project.id }}/volume" class="inline">
+        <div class="narrow"><input name="volume" type="number" min="0" value="{{ project.volume }}"></div>
+        <button class="narrow" type="submit">Сохранить</button>
+    </form>
+    <p class="help-text">Сколько всего ссылок раздать на этот URL. Как они распределятся (безанкор + роли ключей или 100% безанкор) — решает выбранная стратегия.</p>
+</div>
+
+<div class="card">
+    <div class="block-head"><span class="dot {{ 'done' if progress.ready }}">{{ '✓' if progress.ready else '4' }}</span><h2 style="margin:0">Генерация</h2></div>
+    <div class="spacer"></div>
+    {% if progress.ready %}
+    <p class="help-text" style="margin-top:0">Всё готово. Проверьте результат в превью или переходите к выгрузке.</p>
+    {% else %}
+    <p class="help-text" style="margin-top:0">Заполните шаги 1–3 выше, чтобы проект был готов к генерации.</p>
+    {% endif %}
+    <div class="row-actions">
+        <a class="btn btn-sec" href="/projects/{{ project.id }}/preview">Превью результата</a>
+        <a class="btn" href="/generate">К генерации</a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Внутренние страницы</h2>
+    <p class="help-text" style="margin-top:0">Анкоры типовых страниц (app, login, bonus…) настраиваются для проекта в разделе <a href="/suffixes?project={{ project.id }}">«Внутренние страницы»</a>.</p>
+</div>
+
+<div class="card">
+    <div class="row-actions" style="justify-content:flex-end">
+        <form method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm('Удалить проект?')">
+            <button class="btn-danger" type="submit">Удалить проект</button>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block help %}
 <div class="help-block">
     <h3>ℹ️ Справка: настройка проекта</h3>
-    <p>Здесь собирается всё для расчёта плана по одному домену. Порядок простой и показан в блоке «Что нужно сделать» сверху: <b>(1)</b> загрузите частотку внизу страницы — файл с колонками «keyword» и «frequency»; ключи автоматически разложатся по ролям (основной 1/2, добавочный 1/2…) по убыванию частотности. <b>(2)</b> Выберите стратегию — это профиль процентов (сколько ссылок идёт в безанкор и на каждую роль). <b>(3)</b> Задайте объёмы: «Прогоны» — общий профиль анкоров, «Крауд+сабмиты» — отдельный объём, который весь уходит в безанкор.</p>
-    <p>Блок «Внутренние страницы» нужен, если кроме главной вы продвигаете типовые страницы (app, login, bonus…). Выберите язык анкоров и добавьте пары «тип страницы → URL-путь»; анкор соберётся как <b>{бренд} {суффикс}</b> (суффиксы редактируются в разделе «Внутренние страницы»). Поле «Перераспределение» — для тонкой настройки: если для какой-то роли нет ключа, по умолчанию её процент уходит в безанкор, но здесь можно перенаправить его на конкретную роль.</p>
-    <p>Когда все шаги отмечены галочками, нажмите <b>«Превью результата»</b>, чтобы увидеть готовые строки по вкладкам, и затем <b>«К генерации»</b> — для скачивания Excel. Не забудьте «Сохранить проект» после изменения параметров.</p>
+    <p>Страница собрана по шагам — двигайтесь сверху вниз по пронумерованным блокам. Сначала задайте <b>основные параметры</b> (URL, язык статьи, бренд). Затем <b>(1)</b> загрузите частотку — файл с колонками «ключ» и «частотность»; ключи сами разложатся по ролям. <b>(2)</b> Выберите стратегию — в её названии показаны вид безанкора и проценты по ролям; тип кампании (прогоны или крауд+сабмиты) определяется именно стратегией. <b>(3)</b> Задайте объём — общее число ссылок на URL.</p>
+    <p>Когда все три шага отмечены галочками, блок <b>(4) Генерация</b> станет «готов» — открывайте «Превью результата» для проверки и «К генерации» для выгрузки в Excel. Каждый блок сохраняется своей кнопкой независимо, поэтому можно менять что-то одно, не трогая остальное.</p>
+    <p>Анкоры внутренних страниц (app, login, bonus и т.п.) вынесены в раздел «Внутренние страницы» — там для каждого проекта задаётся язык и соответствие «тип страницы → URL-путь».</p>
 </div>
 {% endblock %}
