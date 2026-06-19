@@ -1,0 +1,55 @@
+"""Runtime app settings (OpenRouter keys for the joke widget).
+
+Two key slots, each routed to a different model so we can alternate (round-robin)
+and dodge a single model's rate limits / timeouts. Keys are added at runtime via
+the discreet panel on the Logs page and stored in SQLite.
+"""
+from __future__ import annotations
+
+import os
+
+from sqlalchemy.orm import Session
+
+from .models import AppSetting
+
+# Each slot uses a different free OpenRouter model.
+SLOT_MODELS = {
+    1: "meta-llama/llama-3.3-70b-instruct:free",
+    2: "deepseek/deepseek-chat-v3.1:free",
+}
+
+
+def get_setting(db: Session, key: str, default: str = "") -> str:
+    row = db.get(AppSetting, key)
+    return row.value if row else default
+
+
+def set_setting(db: Session, key: str, value: str) -> None:
+    row = db.get(AppSetting, key)
+    if row:
+        row.value = value
+    else:
+        db.add(AppSetting(key=key, value=value))
+    db.commit()
+
+
+def get_slots(db: Session) -> list[tuple[str, str]]:
+    """Configured ``(key, model)`` slots, in round-robin order.
+
+    Falls back to the ``OPENROUTER_API_KEY`` env var when no keys are saved.
+    """
+    slots: list[tuple[str, str]] = []
+    for i in (1, 2):
+        key = get_setting(db, f"or_key_{i}", "").strip()
+        if key:
+            slots.append((key, SLOT_MODELS[i]))
+    if not slots:
+        env_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+        if env_key:
+            slots.append((env_key, os.environ.get("OPENROUTER_MODEL", SLOT_MODELS[1])))
+    return slots
+
+
+def slot_status(db: Session) -> dict[int, bool]:
+    """Whether each slot has a key saved."""
+    return {i: bool(get_setting(db, f"or_key_{i}", "").strip()) for i in (1, 2)}

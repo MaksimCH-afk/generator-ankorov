@@ -27,6 +27,7 @@ from .models import (
     Project,
     Strategy,
 )
+from . import appsettings
 from .parsing import parse_frequency, parse_project_sheets, parse_project_table
 from .seed import seed
 from .service import (
@@ -855,6 +856,7 @@ def logs_page(request: Request, db: Session = Depends(get_db), level: str = "", 
             "levels": ["INFO", "WARNING", "ERROR"],
             "sel_level": level,
             "sel_category": category,
+            "key_status": appsettings.slot_status(db),
             "active": "logs",
             "msg": msg,
         },
@@ -870,9 +872,34 @@ def clear_logs(db: Session = Depends(get_db)):
 
 
 @app.get("/api/joke")
-def api_joke():
+def api_joke(db: Session = Depends(get_db)):
     from .jokes import get_joke
-    return {"joke": get_joke()}
+    return {"joke": get_joke(appsettings.get_slots(db))}
+
+
+@app.post("/settings/openrouter-key")
+def save_openrouter_key(db: Session = Depends(get_db), slot: int = Form(...), key: str = Form("")):
+    if slot not in (1, 2):
+        raise HTTPException(400, "Неверный слот")
+    appsettings.set_setting(db, f"or_key_{slot}", (key or "").strip())
+    masked = (key[:8] + "…") if len(key) > 8 else "—"
+    log_event(db, "INFO", "settings", f"OpenRouter ключ {slot} {'сохранён' if key.strip() else 'очищен'}", masked)
+    return JSONResponse({"ok": True, "slot": slot, "saved": bool((key or '').strip())})
+
+
+@app.post("/settings/openrouter-check")
+def check_openrouter_keys(db: Session = Depends(get_db)):
+    from .jokes import ping
+    result = {}
+    for slot, model in appsettings.SLOT_MODELS.items():
+        key = appsettings.get_setting(db, f"or_key_{slot}", "").strip()
+        if not key:
+            result[slot] = "empty"
+        else:
+            result[slot] = "active" if ping(key, model) else "inactive"
+    log_event(db, "INFO", "settings", "Проверка ключей OpenRouter",
+              ", ".join(f"ключ {s}: {v}" for s, v in result.items()))
+    return JSONResponse({"result": result, "models": appsettings.SLOT_MODELS})
 
 
 @app.get("/favicon.ico")

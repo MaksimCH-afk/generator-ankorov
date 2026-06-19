@@ -197,3 +197,12 @@ class History(Base):
     export_format = Column(String, nullable=False, default="")  # zip / separate
     rows_total = Column(Integer, nullable=False, default=0)
     sheets_json = Column(Text, nullable=False, default="{}")    # {sheet: {rows, links}}
+
+
+class AppSetting(Base):
+    """Simple key/value store (e.g. OpenRouter keys for the joke widget)."""
+
+    __tablename__ = "app_settings"
+
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=False, default="")

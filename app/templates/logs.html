@@ -43,6 +43,50 @@
     <div style="padding:22px 24px"><p class="muted" style="margin:0">Логи пусты или ничего не найдено по фильтру.</p></div>
     {% endif %}
 </div>
+
+<div class="card" style="margin-top:18px">
+    <div class="card-title">Ключи OpenRouter (для шуток про SEO)</div>
+    <p class="help-text" style="margin-top:0;margin-bottom:14px">
+        Два слота с разными моделями — шутки чередуются между ними, чтобы реже ловить таймауты и лимиты.
+        «Добавить ключ» берёт значение из буфера обмена (или предложит вставить вручную).
+        Статус: <span id="ks-1" class="badge {{ 'green' if key_status[1] else 'gray' }}">слот 1 — {{ 'подключён' if key_status[1] else 'пусто' }}</span>
+        <span id="ks-2" class="badge {{ 'green' if key_status[2] else 'gray' }}">слот 2 — {{ 'подключён' if key_status[2] else 'пусто' }}</span>
+    </p>
+    <div class="row-actions">
+        <button type="button" class="btn-sec btn-sm" onclick="addKey(1)">Добавить ключ 1</button>
+        <button type="button" class="btn-sec btn-sm" onclick="addKey(2)">Добавить ключ 2</button>
+        <button type="button" class="btn-sm" onclick="checkKeys(this)">Проверить ключи</button>
+        <span id="ks-result" class="help-text" style="margin:0"></span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function post(url, body){ return fetch(url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body}); }
+async function addKey(slot){
+    let key = '';
+    try { key = (await navigator.clipboard.readText()).trim(); } catch(e) { key = ''; }
+    if (!key) { key = (prompt('Вставьте ключ OpenRouter для слота ' + slot + ':') || '').trim(); }
+    if (!key) return;
+    const r = await post('/settings/openrouter-key', 'slot=' + slot + '&key=' + encodeURIComponent(key));
+    const d = await r.json();
+    const b = document.getElementById('ks-' + slot);
+    b.className = 'badge ' + (d.saved ? 'green' : 'gray');
+    b.textContent = 'слот ' + slot + (d.saved ? ' — подключён' : ' — пусто');
+    document.getElementById('ks-result').textContent = 'Ключ ' + slot + ' сохранён. Нажмите «Проверить ключи».';
+}
+async function checkKeys(btn){
+    const res = document.getElementById('ks-result');
+    btn.disabled = true; res.textContent = 'Проверяем…';
+    try {
+        const d = await (await post('/settings/openrouter-check', '')).json();
+        const label = {active:'активен', inactive:'не отвечает', empty:'пусто'};
+        res.textContent = 'Слот 1: ' + label[d.result[1]] + ' · Слот 2: ' + label[d.result[2]];
+    } catch(e) { res.textContent = 'Не удалось проверить.'; }
+    btn.disabled = false;
+}
+</script>
 {% endblock %}
 
 {% block help_text %}

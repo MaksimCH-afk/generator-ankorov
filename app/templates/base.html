@@ -46,7 +46,7 @@
                 <span class="joke-sep"></span>
                 <span class="joke-text" id="joke-text">…</span>
                 <button class="joke-refresh" id="joke-refresh" title="Ещё одну" aria-label="Ещё одну">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8M20 4v4h-4M20 12a8 8 0 0 1-13.7 5.6L4 16M4 20v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
                 </button>
             </div>
         </header>
@@ -83,16 +83,23 @@
 </div>
 
 <script>
-function loadJoke() {
+// G: keep the same joke across page navigations (sessionStorage); fetch a fresh
+// one only on first load of the session or when the refresh button is pressed.
+function loadJoke(force) {
     const box = document.getElementById('joke-text');
     if (!box) return;
+    if (!force) {
+        const cached = sessionStorage.getItem('seo_joke');
+        if (cached) { box.textContent = cached; return; }
+    }
+    box.textContent = 'Думаем над шуткой…';
     fetch('/api/joke').then(r => r.json())
-        .then(d => { box.textContent = d.joke || '…'; })
+        .then(d => { const j = d.joke || '…'; box.textContent = j; sessionStorage.setItem('seo_joke', j); })
         .catch(() => { box.textContent = 'SEO-шутка на переиндексации 🙂'; });
 }
-document.addEventListener('DOMContentLoaded', loadJoke);
+document.addEventListener('DOMContentLoaded', function(){ loadJoke(false); });
 var jr = document.getElementById('joke-refresh');
-if (jr) jr.addEventListener('click', loadJoke);
+if (jr) jr.addEventListener('click', function(){ loadJoke(true); });
 </script>
 {% block scripts %}{% endblock %}
 </body>
