@@ -12,14 +12,21 @@
     <form method="post" action="/generate">
         <div class="table-wrap">
         <table>
-            <thead><tr><th style="width:40px"><input type="checkbox" onclick="toggleAll(this)" checked></th><th>URL</th><th>Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th class="num">Ключей</th><th>Готовность</th></tr></thead>
+            <thead><tr><th style="width:40px"><input type="checkbox" onclick="toggleAll(this)" checked></th><th>URL</th><th style="min-width:280px">Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th class="num">Ключей</th><th>Готовность</th></tr></thead>
             <tbody>
             {% for p in projects %}
                 {% set pr = progress[p.id] %}
                 <tr>
                     <td><input type="checkbox" name="project_ids" value="{{ p.id }}" {{ 'checked' if pr.ready }}></td>
                     <td class="mono">{{ p.url }}</td>
-                    <td>{{ p.strategy.name if p.strategy else '—' }}</td>
+                    <td>
+                        <select onchange="setStrategy({{ p.id }}, this.value)">
+                            <option value="">— выбрать стратегию —</option>
+                            {% for o in strategy_options %}
+                            <option value="{{ o.id }}" {{ 'selected' if p.strategy_id==o.id }}>{{ o.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
                     <td class="num">{{ p.volume }}</td>
                     <td class="num">{{ p.crowd_volume }}</td>
                     <td class="num">{{ p.keywords|length }}</td>
@@ -46,13 +53,20 @@
 
 <script>
 function toggleAll(cb) { document.querySelectorAll('input[name="project_ids"]').forEach(i => i.checked = cb.checked); }
+function setStrategy(pid, val) {
+    fetch('/projects/' + pid + '/strategy', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'strategy_id=' + encodeURIComponent(val)
+    }).then(() => location.reload());
+}
 </script>
 {% endblock %}
 
 {% block help %}
 <div class="help-block">
     <h3>ℹ️ Справка: генерация</h3>
-    <p>Финальный шаг. Отметьте галочками проекты, для которых нужно собрать план ссылок. Проекты со статусом <b>«Готов»</b> уже отмечены автоматически — у них есть частотка, выбрана стратегия и заданы объёмы. Проекты «Не настроен» лучше сначала донастроить на их странице, иначе вкладки в Excel получатся неполными.</p>
+    <p>Финальный шаг. Прямо в таблице, в колонке <b>«Стратегия»</b>, выберите стратегию для каждого проекта — это сразу её применяет (для импортированных проектов так быстрее всего довести их до статуса «Готов»). В названии стратегии в скобках показано: вид безанкора и проценты по ролям, напр. <span class="mono">Обычная (70% / 12 + 9 + 5 + 4)</span>. Сами стратегии и виды безанкора настраиваются на вкладках «Стратегии» и «Безанкорные профили». Отметьте галочками нужные проекты.</p>
     <p>Выберите формат выгрузки: <b>ZIP-архив</b> удобен, когда проектов несколько — все файлы скачаются одним архивом. <b>Раздельные Excel-файлы</b> подойдут для одного проекта. Каждый домен выгружается в отдельный файл с вкладками «Прогоны», «Крауд+сабмиты» и «Внутренние страницы».</p>
     <p>Каждая генерация автоматически сохраняется в раздел <b>«История»</b> (что, по какой стратегии и в каком формате сгенерировано), а подробности по шагам пишутся в «Логи». Перед скачиванием можно проверить результат через кнопку «Превью» на странице проекта.</p>
 </div>

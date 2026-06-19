@@ -83,8 +83,12 @@ class Strategy(Base):
     name = Column(String, unique=True, nullable=False)
     anchorless_percent = Column(Float, nullable=False, default=0.0)
     roles_json = Column(Text, nullable=False, default="[]")
+    # Which anchorless profile this strategy uses (how the anchorless share looks).
+    anchorless_profile_id = Column(Integer, ForeignKey("anchorless_profiles.id"), nullable=True)
     # When True this is a campaign-type preset (e.g. "крауд+сабмиты" = 100% anchorless).
     is_builtin = Column(Boolean, default=False)
+
+    anchorless_profile = relationship("AnchorlessProfile")
 
 
 class AnchorlessProfile(Base):

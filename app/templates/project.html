@@ -70,18 +70,7 @@
             <div class="field"><label>Объём «Прогоны»</label><input name="volume" type="number" value="{{ project.volume }}"></div>
             <div class="field"><label>Объём «Крауд+сабмиты»</label><input name="crowd_volume" type="number" value="{{ project.crowd_volume }}"></div>
         </div>
-        <div class="grid grid-3">
-            <div class="field">
-                <label>Безанкорный профиль</label>
-                <select name="anchorless_profile_id">
-                    <option value="">По умолчанию (100% голый URL)</option>
-                    {% for ap in anchorless_profiles %}
-                    <option value="{{ ap.id }}" {{ 'selected' if project.anchorless_profile_id==ap.id }}>{{ ap.name }}</option>
-                    {% endfor %}
-                </select>
-                <div class="help-text">Профили настраиваются в разделе «Безанкорные профили».</div>
-            </div>
-        </div>
+        <p class="help-text" style="margin-top:0">Вид безанкора (голый URL / голый домен и их пропорция) задаётся в самой стратегии — на вкладке «Стратегии».</p>
 
         <h2 style="margin-top:18px">Внутренние страницы</h2>
         <div class="grid grid-3">

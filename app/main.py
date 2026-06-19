@@ -27,7 +27,7 @@ from .models import (
 )
 from .parsing import parse_frequency, parse_project_sheets, parse_project_table
 from .seed import seed
-from .service import generate_project_sheets, profile_example
+from .service import anchorless_summary, generate_project_sheets, profile_example, strategy_label
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -84,10 +84,21 @@ def strategies_page(request: Request, db: Session = Depends(get_db), error: str 
     strategies = db.query(Strategy).order_by(Strategy.id).all()
     parsed = []
     for s in strategies:
-        parsed.append({"obj": s, "roles": json.loads(s.roles_json)})
+        parsed.append({
+            "obj": s,
+            "roles": json.loads(s.roles_json),
+            "anchorless": anchorless_summary(s),
+        })
     return templates.TemplateResponse(
         "strategies.html",
-        {"request": request, "strategies": parsed, "active": "strategies", "error": error, "msg": msg},
+        {
+            "request": request,
+            "strategies": parsed,
+            "anchorless_profiles": db.query(AnchorlessProfile).order_by(AnchorlessProfile.id).all(),
+            "active": "strategies",
+            "error": error,
+            "msg": msg,
+        },
     )
 
 
@@ -125,6 +136,8 @@ async def save_strategy(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(f"/strategies?error={err}", status_code=303)
 
     roles_json = json.dumps([{"name": r.name, "percent": r.percent} for r in roles], ensure_ascii=False)
+    apid = form.get("anchorless_profile_id")
+    profile_id = int(apid) if apid else None
     if sid:
         strategy = db.query(Strategy).get(int(sid))
         if not strategy:
@@ -132,9 +145,11 @@ async def save_strategy(request: Request, db: Session = Depends(get_db)):
         strategy.name = name
         strategy.anchorless_percent = anchorless
         strategy.roles_json = roles_json
+        strategy.anchorless_profile_id = profile_id
         action = "обновлена"
     else:
-        db.add(Strategy(name=name, anchorless_percent=anchorless, roles_json=roles_json))
+        db.add(Strategy(name=name, anchorless_percent=anchorless, roles_json=roles_json,
+                        anchorless_profile_id=profile_id))
         action = "создана"
     db.commit()
     log_event(db, "INFO", "strategy", f"Стратегия «{name}» {action}",
@@ -328,8 +343,6 @@ async def update_project(pid: int, request: Request, db: Session = Depends(get_d
     project.brand = (form.get("brand") or "").strip()
     sid = form.get("strategy_id")
     project.strategy_id = int(sid) if sid else None
-    apid = form.get("anchorless_profile_id")
-    project.anchorless_profile_id = int(apid) if apid else None
     project.volume = int(form.get("volume") or 0)
     project.crowd_volume = int(form.get("crowd_volume") or 0)
     project.internal_language = form.get("internal_language") or "en"
@@ -538,17 +551,33 @@ async def batch_keywords(request: Request, db: Session = Depends(get_db)):
 @app.get("/generate", response_class=HTMLResponse)
 def generate_page(request: Request, db: Session = Depends(get_db), msg: str = "", error: str = ""):
     projects = db.query(Project).order_by(Project.id).all()
+    strategies = db.query(Strategy).order_by(Strategy.id).all()
+    strategy_options = [{"id": s.id, "label": strategy_label(s)} for s in strategies]
     return templates.TemplateResponse(
         "generate.html",
         {
             "request": request,
             "projects": projects,
             "progress": {p.id: _project_progress(p) for p in projects},
+            "strategy_options": strategy_options,
             "active": "generate",
             "msg": msg,
             "error": error,
         },
     )
+
+
+@app.post("/projects/{pid}/strategy")
+def set_project_strategy(pid: int, db: Session = Depends(get_db), strategy_id: str = Form("")):
+    """Set a project's strategy inline from the Generate page."""
+    project = db.query(Project).get(pid)
+    if not project:
+        raise HTTPException(404, "Проект не найден")
+    project.strategy_id = int(strategy_id) if strategy_id else None
+    db.commit()
+    name = project.strategy.name if project.strategy else "—"
+    log_event(db, "INFO", "project", f"Стратегия проекта {project.url} → {name}")
+    return RedirectResponse("/generate", status_code=303)
 
 
 @app.get("/projects/{pid}/preview", response_class=HTMLResponse)

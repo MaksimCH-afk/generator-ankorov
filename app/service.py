@@ -35,7 +35,43 @@ def profile_to_formats(profile: AnchorlessProfile | None) -> list[gen.Anchorless
 
 
 def formats_for_project(db: Session, project: Project) -> list[gen.AnchorlessFormat]:
-    return profile_to_formats(project.anchorless_profile)
+    # The anchorless profile now belongs to the strategy.
+    profile = project.strategy.anchorless_profile if project.strategy else None
+    return profile_to_formats(profile)
+
+
+def _fmt(value: float) -> str:
+    """Drop trailing .0 for clean labels (12.0 -> 12)."""
+    return f"{value:g}"
+
+
+def strategy_label(strategy: Strategy) -> str:
+    """Rich dropdown label, e.g. ``Обычная (70% / 12 + 9 + 5 + 4)`` or, with a
+    multi-format anchorless profile, ``Безопасная (60% + 15% / 13 + 5 + 4 + 3)``.
+    """
+    roles = json.loads(strategy.roles_json or "[]")
+    profile = strategy.anchorless_profile
+    items = json.loads(profile.items_json) if profile else []
+    if len(items) > 1:
+        anchorless_part = " + ".join(f"{_fmt(i.get('percent', 0))}%" for i in items)
+    else:
+        anchorless_part = f"{_fmt(strategy.anchorless_percent)}%"
+    if roles:
+        role_part = " + ".join(_fmt(r["percent"]) for r in roles)
+        return f"{strategy.name} ({anchorless_part} / {role_part})"
+    return f"{strategy.name} ({anchorless_part})"
+
+
+def anchorless_summary(strategy: Strategy) -> str:
+    """Short human summary of a strategy's anchorless profile (for badges)."""
+    profile = strategy.anchorless_profile
+    if not profile:
+        return "безанкор: 100% голый URL"
+    items = json.loads(profile.items_json or "[]")
+    if not items:
+        return f"безанкор: {profile.name}"
+    parts = ", ".join(f"{i.get('name') or i['template']} {_fmt(i.get('percent', 0))}%" for i in items)
+    return f"безанкор: {parts}"
 
 
 def profile_example(profile: AnchorlessProfile, sample: int = 100,

@@ -40,11 +40,6 @@
                 <span class="crumb">{% block page_title %}HubNero{% endblock %}</span>
             </div>
             <div class="topbar-right">
-                <div class="joke" id="joke" title="Шутка про SEO — обновляется при каждом переходе">
-                    <span class="joke-emoji">😄</span>
-                    <span class="joke-text" id="joke-text">Загружаем шутку про SEO…</span>
-                    <button class="joke-refresh" id="joke-refresh" title="Ещё шутку" aria-label="Ещё шутку">↻</button>
-                </div>
                 <span class="clock" id="clock"></span>
             </div>
         </header>
@@ -58,6 +53,14 @@
             {% block help %}{% endblock %}
         </main>
     </div>
+
+    <aside class="joke-panel" id="joke" title="Шутка про SEO — обновляется при каждом переходе">
+        <div class="joke-head">
+            <span>😄 Шутка про SEO</span>
+            <button class="joke-refresh" id="joke-refresh" title="Ещё шутку" aria-label="Ещё шутку">↻</button>
+        </div>
+        <div class="joke-text" id="joke-text">Загружаем шутку…</div>
+    </aside>
 </div>
 
 <script>

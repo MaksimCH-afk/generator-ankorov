@@ -33,13 +33,37 @@ FALLBACK_JOKES = [
     "Главное правило SEO: если ничего не помогает — добавь ещё контента и подожди три месяца.",
     "SEO-шник не верит в удачу. Он верит в анкор-лист и крауд-ссылки.",
     "Google обновил алгоритм. SEO-специалисты обновили резюме.",
+    "SEO-специалист в ресторане: «Мне, пожалуйста, что-нибудь из топа меню».",
+    "Почему SEO-шник плохо спит? Боится, что ночью прилетит ручная санкция.",
+    "SEO-шник назвал кота Title, а собаку — Description. Оба не уникальные.",
+    "— Дорогой, ты меня любишь? — Конечно, ты у меня в featured snippet.",
+    "SEO-специалист не верит обещаниям «топ за неделю» — он сам их раздаёт клиентам.",
+    "Оптимизатор оптимизировал-оптимизировал, да недооптимизировал краулинговый бюджет.",
+    "Самый страшный сон SEO-шника: «Ваш сайт переехал на JS без SSR».",
+    "SEO — единственная профессия, где «ссылки с заборов» это работа, а не вандализм.",
+    "Клиент: «А гарантии есть?» SEO-специалист молча показывает на логотип Google.",
+    "У SEO-специалиста на двери табличка: «Не беспокоить, идёт линкбилдинг».",
+    "SEO-шник считает овец: «Овца №1, овца №2… а у этой какой anchor text?»",
+    "Робот Googlebot и SEO-специалист заходят в бар. Бар не проиндексирован.",
+    "SEO-специалист переименовал ребёнка в H1 — слишком уж он был важный.",
+    "Метатег description в резюме SEO-шника: «Открыт к релевантным предложениям».",
 ]
+
+# Remember the last joke shown so we don't repeat it back-to-back.
+_last_joke = {"text": ""}
 
 
 def get_joke() -> str:
-    """Return a short SEO joke (LLM if available, otherwise a local one)."""
+    """Return a short SEO joke (LLM if available, otherwise a local one).
+
+    Avoids repeating the previous joke when possible.
+    """
     joke = _from_openrouter()
-    return joke or random.choice(FALLBACK_JOKES)
+    if not joke or joke == _last_joke["text"]:
+        choices = [j for j in FALLBACK_JOKES if j != _last_joke["text"]] or FALLBACK_JOKES
+        joke = joke if (joke and joke != _last_joke["text"]) else random.choice(choices)
+    _last_joke["text"] = joke
+    return joke
 
 
 def _from_openrouter() -> str | None:

@@ -73,11 +73,12 @@ BASE_SUFFIXES = {
 def _migrate_schema() -> None:
     """Add columns introduced after the first release (SQLite ADD COLUMN)."""
     with engine.begin() as conn:
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(projects)"))}
-        if "anchorless_profile_id" in cols:
-            return
-        if cols:  # table exists but lacks the column
+        proj_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(projects)"))}
+        if proj_cols and "anchorless_profile_id" not in proj_cols:
             conn.execute(text("ALTER TABLE projects ADD COLUMN anchorless_profile_id INTEGER"))
+        strat_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(strategies)"))}
+        if strat_cols and "anchorless_profile_id" not in strat_cols:
+            conn.execute(text("ALTER TABLE strategies ADD COLUMN anchorless_profile_id INTEGER"))
 
 
 def seed() -> None:
@@ -85,16 +86,7 @@ def seed() -> None:
     _migrate_schema()
     db = SessionLocal()
     try:
-        if db.query(Strategy).count() == 0:
-            for s in BASE_STRATEGIES:
-                db.add(
-                    Strategy(
-                        name=s["name"],
-                        anchorless_percent=s["anchorless_percent"],
-                        roles_json=json.dumps(s["roles"], ensure_ascii=False),
-                        is_builtin=True,
-                    )
-                )
+        # Anchorless profiles first — strategies reference the default one.
         if db.query(AnchorlessProfile).count() == 0:
             for p in BASE_PROFILES:
                 db.add(AnchorlessProfile(
@@ -102,6 +94,21 @@ def seed() -> None:
                     items_json=json.dumps(p["items"], ensure_ascii=False),
                     is_builtin=True,
                 ))
+            db.commit()
+        default_profile = db.query(AnchorlessProfile).filter_by(name="100% Голый URL").first()
+        default_profile_id = default_profile.id if default_profile else None
+
+        if db.query(Strategy).count() == 0:
+            for s in BASE_STRATEGIES:
+                db.add(
+                    Strategy(
+                        name=s["name"],
+                        anchorless_percent=s["anchorless_percent"],
+                        roles_json=json.dumps(s["roles"], ensure_ascii=False),
+                        anchorless_profile_id=default_profile_id,
+                        is_builtin=True,
+                    )
+                )
         if db.query(InternalPageSuffix).count() == 0:
             for page_type, langs in BASE_SUFFIXES.items():
                 for lang, suffix in langs.items():
