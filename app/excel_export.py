@@ -1,4 +1,4 @@
-"""Excel (and batch ZIP) export (§6)."""
+"""Excel (and batch ZIP) export."""
 from __future__ import annotations
 
 import io
@@ -9,52 +9,90 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from .generator import GeneratedRow
+from .generator import GeneratedRow, domain_of
 
-COLUMNS = ["Link Q-ty", "URL", "Anchor", "Article Language", "Keyword"]
-# Columns when the Article Language parameter is excluded from the export.
-COLUMNS_NO_LANG = ["Link Q-ty", "URL", "Anchor", "Keyword"]
+# Output columns of the final TЗ (see reference file). One row = one link.
+BASE_COLUMNS = [
+    "Sprint",
+    "SEO Specialist",
+    "Project",
+    "Project Url",
+    "URL Type",
+    "Link Type",
+    "Anchor Type",
+    "Anchor",
+    "Keyword",
+]
+LANG_COLUMN = "Article Language"
 
-HEADER_FILL = PatternFill(start_color="843DCB", end_color="843DCB", fill_type="solid")
+# Match the reference file: black header row, white bold text, black body text.
+HEADER_FILL = PatternFill(start_color="000000", end_color="000000", fill_type="solid")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
+BODY_FONT = Font(color="000000")
+
+INTERNAL_SHEET = "Внутренние страницы"
 
 
-def _row_values(row: GeneratedRow, include_language: bool) -> list:
+def _line(row: GeneratedRow, sprint: str, seo: str, url_type: str,
+          include_language: bool, language: str) -> list:
+    """Build one output line. Link Type / Anchor Type / Keyword stay empty."""
+    line = [
+        sprint,
+        seo,
+        domain_of(row.url),   # Project: bare domain (site.com)
+        row.url,              # Project Url: the page we link to
+        url_type,
+        "",                   # Link Type — empty
+        "",                   # Anchor Type — empty
+        row.anchor,           # Anchor — as computed
+        "",                   # Keyword — empty
+    ]
     if include_language:
-        return [row.link_qty, row.url, row.anchor, row.article_language, row.keyword]
-    return [row.link_qty, row.url, row.anchor, row.keyword]
+        line.append(language)
+    return line
 
 
-def _write_sheet(ws, rows: list[GeneratedRow], include_language: bool) -> None:
-    columns = COLUMNS if include_language else COLUMNS_NO_LANG
+def _write_sheet(ws, rows: list[GeneratedRow], columns: list[str], sprint: str, seo: str,
+                 url_type: str, include_language: bool, language: str) -> None:
     ws.append(columns)
     for cell in ws[1]:
         cell.fill = HEADER_FILL
         cell.font = HEADER_FONT
-    for row in rows:
-        ws.append(_row_values(row, include_language))
 
-    # Auto-ish column widths.
+    # One row per link: repeat each anchor by its link quantity.
+    for row in rows:
+        line = _line(row, sprint, seo, url_type, include_language, language)
+        for _ in range(max(0, row.link_qty)):
+            ws.append(line)
+
+    # Column widths computed from the unique (un-expanded) rows for speed.
     widths = [len(c) for c in columns]
     for row in rows:
-        for i, value in enumerate(_row_values(row, include_language)):
+        for i, value in enumerate(_line(row, sprint, seo, url_type, include_language, language)):
             widths[i] = max(widths[i], len(str(value)))
     for i, width in enumerate(widths):
         ws.column_dimensions[get_column_letter(i + 1)].width = min(width + 4, 70)
     ws.freeze_panes = "A2"
 
 
-def build_workbook(sheets: dict[str, list[GeneratedRow]], include_language: bool = True) -> bytes:
-    """Build one .xlsx file with the given ``sheet name -> rows`` mapping.
+def build_workbook(sheets: dict[str, list[GeneratedRow]], *, sprint: str = "",
+                   seo_specialist: str = "", language: str = "",
+                   include_language: bool | None = None) -> bytes:
+    """Build one .xlsx file. ``sheets`` maps sheet name -> rows.
 
-    When ``include_language`` is False the "Article Language" column is omitted
-    from the output entirely.
+    Each link becomes its own row. ``Article Language`` is appended as a column
+    when a language is set (unless ``include_language`` overrides).
     """
+    if include_language is None:
+        include_language = bool((language or "").strip())
+    columns = BASE_COLUMNS + ([LANG_COLUMN] if include_language else [])
+
     wb = Workbook()
     wb.remove(wb.active)
     for name, rows in sheets.items():
         ws = wb.create_sheet(title=_safe_sheet_name(name))
-        _write_sheet(ws, rows, include_language)
+        url_type = "Inner Page" if name == INTERNAL_SHEET else "Main Page"
+        _write_sheet(ws, rows, columns, sprint, seo_specialist, url_type, include_language, language)
     if not wb.sheetnames:  # never leave an empty workbook
         wb.create_sheet(title="Empty")
     buffer = io.BytesIO()
@@ -76,7 +114,7 @@ def safe_filename(url: str) -> str:
 
 
 def build_zip(files: dict[str, bytes]) -> bytes:
-    """Bundle ``filename -> bytes`` into a ZIP archive (§6 batch)."""
+    """Bundle ``filename -> bytes`` into a ZIP archive."""
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for filename, content in files.items():

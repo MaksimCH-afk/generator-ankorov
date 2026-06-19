@@ -32,6 +32,9 @@ from .database import Base
 # Supported localisation languages for internal-page anchor suffixes (§3.6 / Q10).
 SUFFIX_LANGUAGES = ["en", "de", "pl", "tr", "pt-br"]
 
+# SEO specialists offered in the export dropdown (default = first).
+SEO_SPECIALISTS = ["Miles Nashwood", "Fay"]
+
 # Preset article languages offered as a dropdown for projects (English names).
 # Empty string is used as the special "do not include in export" value.
 ARTICLE_LANGUAGES = [

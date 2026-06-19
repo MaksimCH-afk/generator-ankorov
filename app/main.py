@@ -16,6 +16,7 @@ from .excel_export import build_workbook, build_zip, safe_filename
 from .logging_util import log_event
 from .models import (
     ARTICLE_LANGUAGES,
+    SEO_SPECIALISTS,
     SUFFIX_LANGUAGES,
     AnchorlessProfile,
     History,
@@ -27,7 +28,13 @@ from .models import (
 )
 from .parsing import parse_frequency, parse_project_sheets, parse_project_table
 from .seed import seed
-from .service import anchorless_summary, generate_project_sheets, profile_example, strategy_label
+from .service import (
+    anchorless_summary,
+    generate_project_sheets,
+    profile_example,
+    project_breakdown,
+    strategy_label,
+)
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -352,13 +359,15 @@ async def update_basics(pid: int, request: Request, db: Session = Depends(get_db
 
 
 @app.post("/projects/{pid}/volume")
-def update_volume(pid: int, db: Session = Depends(get_db), volume: int = Form(0)):
+def update_volume(pid: int, db: Session = Depends(get_db), volume: int = Form(0), next: str = Form("")):
     project = db.query(Project).get(pid)
     if not project:
         raise HTTPException(404, "Проект не найден")
     project.volume = max(0, int(volume or 0))
     db.commit()
     log_event(db, "INFO", "project", f"Объём проекта {project.url} → {project.volume}")
+    if next.startswith("/"):
+        return RedirectResponse(next, status_code=303)
     return RedirectResponse(f"/projects/{pid}?msg=Объём сохранён", status_code=303)
 
 
@@ -588,12 +597,26 @@ def generate_page(request: Request, db: Session = Depends(get_db), msg: str = ""
             "request": request,
             "projects": projects,
             "progress": {p.id: _project_progress(p) for p in projects},
+            "breakdowns": {p.id: project_breakdown(db, p) for p in projects},
             "strategy_options": strategy_options,
+            "article_languages": ARTICLE_LANGUAGES,
+            "seo_specialists": SEO_SPECIALISTS,
             "active": "generate",
             "msg": msg,
             "error": error,
         },
     )
+
+
+@app.post("/projects/{pid}/language")
+def set_project_language(pid: int, db: Session = Depends(get_db), language: str = Form("")):
+    """Set a project's article language inline (from the Generate page)."""
+    project = db.query(Project).get(pid)
+    if not project:
+        raise HTTPException(404, "Проект не найден")
+    project.language = (language or "").strip()
+    db.commit()
+    return RedirectResponse("/generate", status_code=303)
 
 
 @app.post("/projects/{pid}/strategy")
@@ -635,7 +658,9 @@ def preview(pid: int, request: Request, db: Session = Depends(get_db)):
 async def generate(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     pids = [int(x) for x in form.getlist("project_ids")]
-    export_format = form.get("export_format", "zip")
+    export_format = form.get("export_format", "separate")
+    sprint = (form.get("sprint") or "").strip()
+    seo_specialist = (form.get("seo_specialist") or "").strip()
     if not pids:
         return RedirectResponse("/generate?error=Выберите хотя бы один проект.", status_code=303)
 
@@ -645,8 +670,9 @@ async def generate(request: Request, db: Session = Depends(get_db)):
         sheets = generate_project_sheets(db, project)
         if not sheets:
             continue
-        include_language = bool((project.language or "").strip())
-        files[safe_filename(project.url)] = build_workbook(sheets, include_language=include_language)
+        files[safe_filename(project.url)] = build_workbook(
+            sheets, sprint=sprint, seo_specialist=seo_specialist, language=project.language or "",
+        )
 
         # Record History (§ "история": what / how / by which strategy).
         sheet_summary = {name: {"rows": len(rows), "links": sum(r.link_qty for r in rows)}

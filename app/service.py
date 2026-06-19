@@ -130,6 +130,22 @@ def main_sheet_name(strategy: Strategy) -> str:
     return "Крауд+сабмиты" if is_crowd_strategy(strategy) else "Прогоны"
 
 
+def project_breakdown(db: Session, project: Project) -> list[dict]:
+    """Per-project anchor breakdown for the main campaign sheet: which anchor /
+    keyword gets how many links and what share. Used for the Generate preview."""
+    if not project.strategy or (project.volume or 0) <= 0:
+        return []
+    pin = project_to_gen(db, project)
+    formats = formats_for_project(db, project)
+    strat = strategy_to_gen(project.strategy)
+    rows = gen.generate_profile_rows(pin, strat, project.volume, formats)
+    total = sum(r.link_qty for r in rows) or 1
+    return [
+        {"anchor": r.anchor, "count": r.link_qty, "percent": round(r.link_qty / total * 100, 1)}
+        for r in rows if r.link_qty > 0
+    ]
+
+
 def generate_project_sheets(db: Session, project: Project) -> dict[str, list[gen.GeneratedRow]]:
     """Build the sheets for a project (§6).
 

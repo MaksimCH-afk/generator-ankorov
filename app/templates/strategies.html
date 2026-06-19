@@ -9,6 +9,35 @@
 </div>
 
 <div class="card">
+    <h2>Сохранённые стратегии</h2>
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>Название</th><th>Безанкор</th><th>Роли</th><th></th></tr></thead>
+        <tbody>
+        {% for s in strategies %}
+            <tr>
+                <td>
+                    {{ s.obj.name }}
+                    {% if s.obj.is_builtin %}<span class="badge gray">базовая</span>{% endif %}
+                    <div style="margin-top:5px"><span class="badge purple">{{ s.anchorless }}</span></div>
+                </td>
+                <td>{{ s.obj.anchorless_percent }}%</td>
+                <td>{% for r in s.roles %}<span class="pill accent">{{ r.name }} {{ r.percent }}%</span>{% endfor %}{% if not s.roles %}<span class="muted">—</span>{% endif %}</td>
+                <td class="actions right row-actions">
+                    <button type="button" class="btn-sec btn-sm"
+                        onclick='editStrategy({{ s.obj.id }}, {{ s.obj.name|tojson }}, {{ s.obj.anchorless_percent }}, {{ s.roles|tojson }}, {{ (s.obj.anchorless_profile_id or "")|tojson }})'>Изменить</button>
+                    <form method="post" action="/strategies/{{ s.obj.id }}/delete" style="display:inline" onsubmit="return confirm('Удалить стратегию?')">
+                        <button class="btn-danger btn-sm" type="submit">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="card" id="strategy-card">
     <h2>Создать / редактировать стратегию</h2>
     <form method="post" action="/strategies/save" id="strategy-form">
         <input type="hidden" name="id" id="strategy-id">
@@ -39,35 +68,6 @@
             <button type="button" class="btn-ghost" onclick="resetStrategyForm()">Очистить</button>
         </div>
     </form>
-</div>
-
-<div class="card">
-    <h2>Сохранённые стратегии</h2>
-    <div class="table-wrap">
-    <table>
-        <thead><tr><th>Название</th><th>Безанкор</th><th>Роли</th><th></th></tr></thead>
-        <tbody>
-        {% for s in strategies %}
-            <tr>
-                <td>
-                    {{ s.obj.name }}
-                    {% if s.obj.is_builtin %}<span class="badge gray">базовая</span>{% endif %}
-                    <div style="margin-top:5px"><span class="badge purple">{{ s.anchorless }}</span></div>
-                </td>
-                <td>{{ s.obj.anchorless_percent }}%</td>
-                <td>{% for r in s.roles %}<span class="pill accent">{{ r.name }} {{ r.percent }}%</span>{% endfor %}{% if not s.roles %}<span class="muted">—</span>{% endif %}</td>
-                <td class="actions right row-actions">
-                    <button type="button" class="btn-sec btn-sm"
-                        onclick='editStrategy({{ s.obj.id }}, {{ s.obj.name|tojson }}, {{ s.obj.anchorless_percent }}, {{ s.roles|tojson }}, {{ (s.obj.anchorless_profile_id or "")|tojson }})'>Изменить</button>
-                    <form method="post" action="/strategies/{{ s.obj.id }}/delete" style="display:inline" onsubmit="return confirm('Удалить стратегию?')">
-                        <button class="btn-danger btn-sm" type="submit">Удалить</button>
-                    </form>
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
 </div>
 
 <script>
@@ -106,7 +106,7 @@ function editStrategy(id, name, anchorless, roles, profileId) {
     document.getElementById('roles').innerHTML = '';
     roles.forEach(r => addRole(r.name, r.percent));
     recalcSum();
-    window.scrollTo({top: 0, behavior: 'smooth'});
+    document.getElementById('strategy-card').scrollIntoView({behavior: 'smooth'});
 }
 resetStrategyForm();
 </script>

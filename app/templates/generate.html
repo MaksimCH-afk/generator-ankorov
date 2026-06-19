@@ -8,11 +8,45 @@
     </div>
 </div>
 
-<div class="card">
-    <form method="post" action="/generate">
+<form method="post" action="/generate">
+    <div class="card">
+        <h2>Параметры выгрузки</h2>
+        <div class="grid grid-3">
+            <div class="field">
+                <label>Sprint</label>
+                <input name="sprint" placeholder="напр. 122">
+                <div class="help-text">Одно значение на весь файл.</div>
+            </div>
+            <div class="field">
+                <label>SEO Specialist</label>
+                <select name="seo_specialist">
+                    {% for s in seo_specialists %}
+                    <option value="{{ s }}" {{ 'selected' if loop.first }}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label>Формат выгрузки</label>
+                <select name="export_format">
+                    <option value="separate" selected>Раздельные Excel-файлы</option>
+                    <option value="zip">ZIP-архив (все файлы)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
         <div class="table-wrap">
         <table>
-            <thead><tr><th style="width:40px"><input type="checkbox" onclick="toggleAll(this)" checked></th><th>URL</th><th style="min-width:280px">Стратегия</th><th class="num">Объём</th><th class="num">Ключей</th><th>Готовность</th></tr></thead>
+            <thead><tr>
+                <th style="width:40px"><input type="checkbox" onclick="toggleAll(this)" checked></th>
+                <th>URL</th>
+                <th style="min-width:260px">Стратегия</th>
+                <th class="num" style="width:90px">Объём</th>
+                <th style="min-width:150px">Язык статьи</th>
+                <th class="num">Ключей</th>
+                <th>Готовность</th>
+            </tr></thead>
             <tbody>
             {% for p in projects %}
                 {% set pr = progress[p.id] %}
@@ -27,46 +61,66 @@
                             {% endfor %}
                         </select>
                     </td>
-                    <td class="num">{{ p.volume }}</td>
+                    <td class="num"><input type="number" min="0" value="{{ p.volume }}" style="width:80px;text-align:right"
+                        onchange="setVolume({{ p.id }}, this.value)"></td>
+                    <td>
+                        <select onchange="setLang({{ p.id }}, this.value)">
+                            {% for lang in article_languages %}
+                            <option value="{{ lang }}" {{ 'selected' if p.language==lang }}>{{ lang }}</option>
+                            {% endfor %}
+                            <option value="" {{ 'selected' if not p.language }}>— Не указывать —</option>
+                        </select>
+                    </td>
                     <td class="num">{{ p.keywords|length }}</td>
                     <td>{% if pr.ready %}<span class="badge green">Готов</span>{% else %}<span class="badge amber">Не настроен</span>{% endif %}</td>
                 </tr>
+                {% if breakdowns[p.id] %}
+                <tr class="breakdown-row">
+                    <td></td>
+                    <td colspan="6">
+                        <details>
+                            <summary class="muted" style="cursor:pointer">Распределение анкоров ({{ p.keywords|length }} ключей) — какой анкор в каком %</summary>
+                            <div class="table-wrap" style="margin-top:8px">
+                            <table>
+                                <thead><tr><th>Анкор</th><th class="num">Ссылок</th><th class="num">Доля</th></tr></thead>
+                                <tbody>
+                                {% for b in breakdowns[p.id] %}
+                                <tr><td class="mono">{{ b.anchor }}</td><td class="num">{{ b.count }}</td><td class="num">{{ b.percent }}%</td></tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                            </div>
+                        </details>
+                    </td>
+                </tr>
+                {% endif %}
             {% endfor %}
             </tbody>
         </table>
         </div>
 
         {% if not projects %}<p class="muted">Нет проектов. Создайте их в разделе «Проекты».</p>{% endif %}
+    </div>
 
-        <hr>
-        <div class="field" style="max-width:340px">
-            <label>Формат выгрузки</label>
-            <select name="export_format">
-                <option value="zip">ZIP-архив (все файлы)</option>
-                <option value="separate">Раздельные Excel-файлы</option>
-            </select>
-        </div>
-        <button type="submit">⬇ Сгенерировать и скачать</button>
-    </form>
-</div>
+    <button type="submit">⬇ Сгенерировать и скачать</button>
+</form>
 
 <script>
 function toggleAll(cb) { document.querySelectorAll('input[name="project_ids"]').forEach(i => i.checked = cb.checked); }
-function setStrategy(pid, val) {
-    fetch('/projects/' + pid + '/strategy', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'strategy_id=' + encodeURIComponent(val)
-    }).then(() => location.reload());
+function post(url, body) {
+    return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: body});
 }
+function setStrategy(pid, val) { post('/projects/' + pid + '/strategy', 'strategy_id=' + encodeURIComponent(val)).then(() => location.reload()); }
+function setVolume(pid, val) { post('/projects/' + pid + '/volume', 'volume=' + encodeURIComponent(val) + '&next=/generate').then(() => location.reload()); }
+function setLang(pid, val) { post('/projects/' + pid + '/language', 'language=' + encodeURIComponent(val)).then(() => location.reload()); }
 </script>
 {% endblock %}
 
 {% block help %}
 <div class="help-block">
     <h3>ℹ️ Справка: генерация</h3>
-    <p>Финальный шаг. Прямо в таблице, в колонке <b>«Стратегия»</b>, выберите стратегию для каждого проекта — это сразу её применяет (для импортированных проектов так быстрее всего довести их до статуса «Готов»). В названии стратегии в скобках показано: вид безанкора и проценты по ролям, напр. <span class="mono">Обычная (70% / 12 + 9 + 5 + 4)</span>. Сами стратегии и виды безанкора настраиваются на вкладках «Стратегии» и «Безанкорные профили». Отметьте галочками нужные проекты.</p>
-    <p>Выберите формат выгрузки: <b>ZIP-архив</b> удобен, когда проектов несколько — все файлы скачаются одним архивом. <b>Раздельные Excel-файлы</b> подойдут для одного проекта. Каждый домен выгружается в отдельный файл: основная вкладка («Прогоны» или «Крауд+сабмиты» — по стратегии) плюс «Внутренние страницы».</p>
-    <p>Каждая генерация автоматически сохраняется в раздел <b>«История»</b> (что, по какой стратегии и в каком формате сгенерировано), а подробности по шагам пишутся в «Логи». Перед скачиванием можно проверить результат через кнопку «Превью» на странице проекта.</p>
+    <p>Финальный шаг. В блоке <b>«Параметры выгрузки»</b> задайте <b>Sprint</b> (одно значение на весь файл), <b>SEO Specialist</b> (по умолчанию Miles Nashwood) и формат (по умолчанию — раздельные Excel-файлы). В таблице для каждого проекта прямо на месте выберите <b>стратегию</b>, задайте <b>объём</b> (любое число — 50, 100, 200, 1000…) и <b>язык статьи</b>; изменения применяются сразу.</p>
+    <p>Раскрывайте <b>«Распределение анкоров»</b> под проектом, чтобы увидеть, какой анкор сколько ссылок получит и в каком проценте — это та же разбивка, что попадёт в Excel. Отметьте галочками нужные проекты и нажмите «Сгенерировать».</p>
+    <p>В Excel одна строка = одна ссылка. Колонки: Sprint, SEO Specialist, Project (домен), Project Url (страница размещения), URL Type, Link Type, Anchor Type, Anchor, Keyword и Article Language. Каждая генерация сохраняется в «Историю», детали — в «Логи».</p>
 </div>
 {% endblock %}
