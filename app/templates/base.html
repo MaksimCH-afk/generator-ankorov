@@ -25,7 +25,7 @@
 
             <div class="nav-section">Справочники</div>
             <a href="/strategies" class="nav-link {{ 'on' if active=='strategies' }}">Стратегии</a>
-            <a href="/formats" class="nav-link {{ 'on' if active=='formats' }}">Безанкорные форматы</a>
+            <a href="/profiles" class="nav-link {{ 'on' if active=='profiles' }}">Безанкорные профили</a>
             <a href="/suffixes" class="nav-link {{ 'on' if active=='suffixes' }}">Внутренние страницы</a>
 
             <div class="nav-section">Система</div>
@@ -40,6 +40,11 @@
                 <span class="crumb">{% block page_title %}HubNero{% endblock %}</span>
             </div>
             <div class="topbar-right">
+                <div class="joke" id="joke" title="Шутка про SEO — обновляется при каждом переходе">
+                    <span class="joke-emoji">😄</span>
+                    <span class="joke-text" id="joke-text">Загружаем шутку про SEO…</span>
+                    <button class="joke-refresh" id="joke-refresh" title="Ещё шутку" aria-label="Ещё шутку">↻</button>
+                </div>
                 <span class="clock" id="clock"></span>
             </div>
         </header>
@@ -64,6 +69,20 @@ function tick() {
     if (el) el.textContent = d.toLocaleDateString('ru-RU', opts) + ' · ' + t;
 }
 tick(); setInterval(tick, 30000);
+
+// SEO joke — fetched on every page load (i.e. on every tab switch) and on demand.
+function loadJoke() {
+    const box = document.getElementById('joke-text');
+    if (!box) return;
+    box.textContent = 'Думаем над шуткой…';
+    fetch('/api/joke')
+        .then(r => r.json())
+        .then(d => { box.textContent = d.joke || '…'; })
+        .catch(() => { box.textContent = 'SEO-шутка временно на переиндексации 🙂'; });
+}
+document.addEventListener('DOMContentLoaded', loadJoke);
+const jokeBtn = document.getElementById('joke-refresh');
+if (jokeBtn) jokeBtn.addEventListener('click', loadJoke);
 </script>
 <script src="/static/app.js"></script>
 </body>

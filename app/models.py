@@ -3,7 +3,7 @@
 The data model mirrors the entities in the spec (§3):
 
 * :class:`Strategy`       - named anchor profile (anchorless % + ordered roles).
-* :class:`AnchorlessFormat` - a way to render an anchorless link (bare url, markdown...).
+* :class:`AnchorlessProfile` - a saved profile of anchorless link formats.
 * :class:`InternalPageSuffix` - dictionary ``page type + language -> anchor suffix`` (§3.6).
 * :class:`Project`        - a domain to process, with its frequency keywords and
   internal-page path mapping.
@@ -87,20 +87,19 @@ class Strategy(Base):
     is_builtin = Column(Boolean, default=False)
 
 
-class AnchorlessFormat(Base):
-    """A rendering template for an anchorless link (§3.5).
-
-    ``template`` may contain ``{url}`` and ``{domain}`` placeholders.
-    ``sub_weight`` is expressed as a percentage of the *total* volume.
+class AnchorlessProfile(Base):
+    """A saved anchorless profile — like a strategy, but for anchorless link
+    formats. ``items_json`` is an ordered list of
+    ``{"name": str, "template": str, "percent": float}``; percents are relative
+    weights used to split the anchorless share across the formats.
     """
 
-    __tablename__ = "anchorless_formats"
+    __tablename__ = "anchorless_profiles"
 
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
-    template = Column(String, nullable=False, default="{url}")
-    sub_weight = Column(Float, nullable=False, default=0.0)
-    position = Column(Integer, nullable=False, default=0)
+    name = Column(String, unique=True, nullable=False)
+    items_json = Column(Text, nullable=False, default="[]")
+    is_builtin = Column(Boolean, default=False)
 
 
 class InternalPageSuffix(Base):
@@ -128,6 +127,8 @@ class Project(Base):
     strategy_id = Column(Integer, ForeignKey("strategies.id"), nullable=True)
     volume = Column(Integer, nullable=False, default=100)        # "прогоны" volume
     crowd_volume = Column(Integer, nullable=False, default=0)    # "крауд+сабмиты" volume
+    # Anchorless profile (how the anchorless share is split across formats).
+    anchorless_profile_id = Column(Integer, ForeignKey("anchorless_profiles.id"), nullable=True)
 
     internal_language = Column(String, nullable=False, default="en")
     # JSON mapping page_type -> url path, e.g. {"app": "/app/", "login": "/login/"}.
@@ -137,6 +138,7 @@ class Project(Base):
     redistribution_json = Column(Text, nullable=False, default="{}")
 
     strategy = relationship("Strategy")
+    anchorless_profile = relationship("AnchorlessProfile")
     keywords = relationship(
         "Keyword",
         back_populates="project",

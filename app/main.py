@@ -17,7 +17,7 @@ from .logging_util import log_event
 from .models import (
     ARTICLE_LANGUAGES,
     SUFFIX_LANGUAGES,
-    AnchorlessFormat,
+    AnchorlessProfile,
     History,
     InternalPageSuffix,
     Keyword,
@@ -25,9 +25,9 @@ from .models import (
     Project,
     Strategy,
 )
-from .parsing import parse_frequency, parse_workbook_sheets
+from .parsing import parse_frequency, parse_project_sheets, parse_project_table
 from .seed import seed
-from .service import generate_project_sheets
+from .service import generate_project_sheets, profile_example
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -68,7 +68,6 @@ def dashboard(request: Request, db: Session = Depends(get_db), msg: str = "", er
             "projects": projects,
             "progress": {p.id: _project_progress(p) for p in projects},
             "strategies": db.query(Strategy).order_by(Strategy.id).all(),
-            "formats": db.query(AnchorlessFormat).order_by(AnchorlessFormat.position).all(),
             "article_languages": ARTICLE_LANGUAGES,
             "active": "dashboard",
             "msg": msg,
@@ -156,50 +155,68 @@ def delete_strategy(sid: int, db: Session = Depends(get_db)):
 
 
 # --------------------------------------------------------------------------- #
-# Anchorless formats (§3.5)
+# Anchorless profiles (saved presets, like strategies)
 # --------------------------------------------------------------------------- #
-@app.get("/formats", response_class=HTMLResponse)
-def formats_page(request: Request, db: Session = Depends(get_db), msg: str = ""):
+@app.get("/profiles", response_class=HTMLResponse)
+def profiles_page(request: Request, db: Session = Depends(get_db), error: str = "", msg: str = ""):
+    profiles = db.query(AnchorlessProfile).order_by(AnchorlessProfile.id).all()
+    parsed = []
+    for p in profiles:
+        parsed.append({"obj": p, "formats": json.loads(p.items_json or "[]"), "example": profile_example(p)})
     return templates.TemplateResponse(
-        "formats.html",
-        {
-            "request": request,
-            "formats": db.query(AnchorlessFormat).order_by(AnchorlessFormat.position, AnchorlessFormat.id).all(),
-            "active": "formats",
-            "msg": msg,
-        },
+        "profiles.html",
+        {"request": request, "profiles": parsed, "active": "profiles", "error": error, "msg": msg},
     )
 
 
-@app.post("/formats/save")
-def save_format(
-    db: Session = Depends(get_db),
-    id: str = Form(""),
-    name: str = Form(...),
-    template: str = Form("{url}"),
-    sub_weight: float = Form(0.0),
-    position: int = Form(0),
-):
-    if id:
-        fmt = db.query(AnchorlessFormat).get(int(id))
-        if not fmt:
-            raise HTTPException(404, "Формат не найден")
-        fmt.name, fmt.template, fmt.sub_weight, fmt.position = name, template, sub_weight, position
+@app.post("/profiles/save")
+async def save_profile(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    pid = form.get("id")
+    name = (form.get("name") or "").strip()
+    names = form.getlist("item_name")
+    templates_ = form.getlist("item_template")
+    percents = form.getlist("item_percent")
+    items = []
+    for nm, tpl, pc in zip(names, templates_, percents):
+        tpl = (tpl or "").strip()
+        if not tpl:
+            continue
+        try:
+            percent = float(str(pc).replace(",", "."))
+        except ValueError:
+            percent = 0.0
+        items.append({"name": (nm or "").strip(), "template": tpl, "percent": percent})
+
+    if not name:
+        return RedirectResponse("/profiles?error=Укажите название профиля", status_code=303)
+    if not items:
+        return RedirectResponse("/profiles?error=Добавьте хотя бы один формат", status_code=303)
+
+    items_json = json.dumps(items, ensure_ascii=False)
+    if pid:
+        profile = db.query(AnchorlessProfile).get(int(pid))
+        if not profile:
+            raise HTTPException(404, "Профиль не найден")
+        profile.name = name
+        profile.items_json = items_json
     else:
-        db.add(AnchorlessFormat(name=name, template=template, sub_weight=sub_weight, position=position))
+        db.add(AnchorlessProfile(name=name, items_json=items_json))
     db.commit()
-    log_event(db, "INFO", "format", f"Сохранён безанкорный формат «{name}»",
-              f"Шаблон: {template}, под-вес: {sub_weight}%")
-    return RedirectResponse("/formats?msg=Формат сохранён", status_code=303)
+    log_event(db, "INFO", "anchorless", f"Сохранён безанкорный профиль «{name}»",
+              f"Форматов: {len(items)}")
+    return RedirectResponse("/profiles?msg=Профиль сохранён", status_code=303)
 
 
-@app.post("/formats/{fid}/delete")
-def delete_format(fid: int, db: Session = Depends(get_db)):
-    fmt = db.query(AnchorlessFormat).get(fid)
-    if fmt:
-        db.delete(fmt)
+@app.post("/profiles/{pid}/delete")
+def delete_profile(pid: int, db: Session = Depends(get_db)):
+    profile = db.query(AnchorlessProfile).get(pid)
+    if profile:
+        for proj in db.query(Project).filter(Project.anchorless_profile_id == pid).all():
+            proj.anchorless_profile_id = None
+        db.delete(profile)
         db.commit()
-    return RedirectResponse("/formats", status_code=303)
+    return RedirectResponse("/profiles", status_code=303)
 
 
 # --------------------------------------------------------------------------- #
@@ -272,6 +289,7 @@ def project_page(pid: int, request: Request, db: Session = Depends(get_db), msg:
             "request": request,
             "project": project,
             "strategies": db.query(Strategy).order_by(Strategy.id).all(),
+            "anchorless_profiles": db.query(AnchorlessProfile).order_by(AnchorlessProfile.id).all(),
             "languages": SUFFIX_LANGUAGES,
             "article_languages": ARTICLE_LANGUAGES,
             "page_types": page_types,
@@ -310,6 +328,8 @@ async def update_project(pid: int, request: Request, db: Session = Depends(get_d
     project.brand = (form.get("brand") or "").strip()
     sid = form.get("strategy_id")
     project.strategy_id = int(sid) if sid else None
+    apid = form.get("anchorless_profile_id")
+    project.anchorless_profile_id = int(apid) if apid else None
     project.volume = int(form.get("volume") or 0)
     project.crowd_volume = int(form.get("crowd_volume") or 0)
     project.internal_language = form.get("internal_language") or "en"
@@ -421,30 +441,28 @@ def _match_project(stem: str, projects: list[Project]) -> Project | None:
 
 @app.post("/projects/batch-keywords")
 async def batch_keywords(request: Request, db: Session = Depends(get_db)):
-    """Upload many частоток at once.
+    """Import projects from uploaded Excel/CSV files.
 
-    Supports two layouts:
-    * **Excel со вкладками** — каждая вкладка = частотка одного проекта; имя
-      вкладки сопоставляется проекту по домену или бренду. В одном файле может
-      быть несколько проектов.
-    * **Отдельные файлы** (CSV/Excel) — один файл = один проект; сопоставление
-      идёт по имени файла (домен/бренд в названии).
-
-    Подробный результат по каждой вкладке/файлу пишется на страницу «Логи».
+    One sheet = one project. A sheet carries everything: keywords, frequency and
+    the domain (in a header cell, a column, or repeated per row). Column names
+    may be synonyms and sit in any position; a KD column is ignored. Empty and
+    summary/dashboard sheets are skipped. Domains in ``http://`` form are
+    converted to ``https://``. Projects are created or updated (matched by URL);
+    if a sheet has no domain, we fall back to matching an existing project by
+    the sheet/file name. Per-sheet details go to the Logs page.
     """
+    from .parsing import normalize_domain  # local import to avoid clutter at top
+
     form = await request.form()
     files = [f for f in form.getlist("files") if getattr(f, "filename", "")]
-    projects = db.query(Project).all()
-
-    if not projects:
-        log_event(db, "WARNING", "upload", "Пакетная загрузка: нет проектов",
-                  "Сначала создайте проекты — частотки сопоставляются с ними по имени вкладки/файла.")
-        return RedirectResponse("/?error=Сначала создайте проекты, затем загружайте частотки пачкой.",
-                                status_code=303)
     if not files:
         return RedirectResponse("/?error=Файлы не выбраны.", status_code=303)
 
-    matched, unmatched, empty = [], [], []
+    created, updated, skipped, unmatched = [], [], [], []
+
+    def by_url(url: str) -> Project | None:
+        norm = normalize_domain(url)
+        return db.query(Project).filter(Project.url == norm).first()
 
     def assign(target: Project, pairs: list[tuple[str, float]]) -> None:
         for kw in list(target.keywords):
@@ -460,47 +478,57 @@ async def batch_keywords(request: Request, db: Session = Depends(get_db)):
         stem = os.path.splitext(os.path.basename(fname))[0]
         is_excel = fname.lower().endswith((".xlsx", ".xlsm"))
 
-        # Build a list of (source_label, match_key, pairs) units to assign.
-        units: list[tuple[str, str, list[tuple[str, float]]]] = []
-        if is_excel:
-            sheets = parse_workbook_sheets(content)
-            single = len(sheets) == 1
-            for sheet_name, pairs in sheets.items():
-                # Single-sheet files: allow the file name as a fallback match key.
-                match_key = sheet_name
-                if single and _match_project(sheet_name, projects) is None:
-                    match_key = stem
-                units.append((f"{fname} → вкладка «{sheet_name}»", match_key, pairs))
-        else:
-            units.append((fname, stem, parse_frequency(fname, content)))
+        units = parse_project_sheets(content) if is_excel else [parse_project_table(fname, content)]
 
-        for label, key, pairs in units:
-            target = _match_project(key, projects)
+        for unit in units:
+            label = f"{fname} → «{unit['name']}»" if is_excel else fname
+            pairs = unit["pairs"]
+            domain = unit["domain"]
+
+            if not pairs:
+                skipped.append(unit["name"])
+                continue  # empty / summary / dashboard sheet — silently skipped
+
+            if domain:
+                existing = by_url(domain)
+                if existing:
+                    assign(existing, pairs)
+                    updated.append(f"{normalize_domain(domain)} ({len(pairs)} ключей)")
+                    log_event(db, "INFO", "import", f"Обновлён проект {normalize_domain(domain)}",
+                              f"{label}, ключей: {len(pairs)}")
+                else:
+                    project = Project(url=normalize_domain(domain), language="English", brand="")
+                    db.add(project)
+                    db.flush()
+                    assign(project, pairs)
+                    created.append(f"{project.url} ({len(pairs)} ключей)")
+                    log_event(db, "INFO", "import", f"Создан проект {project.url}",
+                              f"{label}, ключей: {len(pairs)}")
+                continue
+
+            # No domain in the sheet -> try matching an existing project by name.
+            target = _match_project(unit["name"] if is_excel else stem, db.query(Project).all())
             if target is None:
                 unmatched.append(label)
-                log_event(db, "WARNING", "upload", f"Не сопоставлено: {label}",
-                          f"Имя «{key}» не совпало с доменом или брендом ни одного проекта. "
-                          "Переименуйте вкладку/файл (напр. betalice) или загрузите частотку вручную в проект.")
-                continue
-            if not pairs:
-                empty.append(label)
-                log_event(db, "WARNING", "upload", f"Пусто/не распознано: {label}",
-                          f"Проект {target.url}. Нужны колонки: ключ в 1-й колонке, частотность во 2-й.")
+                log_event(db, "WARNING", "import", f"Не удалось определить проект: {label}",
+                          "В листе не найден домен, и имя листа/файла не совпало ни с одним проектом. "
+                          "Добавьте колонку/ячейку с доменом или переименуйте лист.")
                 continue
             assign(target, pairs)
-            matched.append(f"{label} → {target.url} ({len(pairs)} ключей)")
-            log_event(db, "INFO", "upload", f"Загружено: {label} → {target.url}",
-                      f"Ключей: {len(pairs)}")
+            updated.append(f"{target.url} ({len(pairs)} ключей)")
+            log_event(db, "INFO", "import", f"Обновлён проект {target.url}",
+                      f"{label}, ключей: {len(pairs)}")
 
-    total_units = len(matched) + len(unmatched) + len(empty)
-    parts = [f"Загружено: {len(matched)} из {total_units}."]
+    parts = [f"Создано проектов: {len(created)}, обновлено: {len(updated)}."]
+    if created:
+        parts.append("Новые: " + ", ".join(created))
     if unmatched:
-        parts.append(f"Не сопоставлены ({len(unmatched)}): {', '.join(unmatched)}")
-    if empty:
-        parts.append(f"Пустые/нераспознанные ({len(empty)}): {', '.join(empty)}")
+        parts.append(f"Без домена и без совпадения ({len(unmatched)}): {', '.join(unmatched)}")
+    if skipped:
+        parts.append(f"Пропущено пустых/сводных листов: {len(skipped)}")
     parts.append("Детали — на странице «Логи».")
     note = " ".join(parts)
-    key = "msg" if matched else "error"
+    key = "msg" if (created or updated) else "error"
     return RedirectResponse(f"/?{key}={note}", status_code=303)
 
 
@@ -660,6 +688,12 @@ def clear_logs(db: Session = Depends(get_db)):
     db.commit()
     log_event(db, "WARNING", "logs", "Логи очищены")
     return RedirectResponse("/logs?msg=Логи очищены", status_code=303)
+
+
+@app.get("/api/joke")
+def api_joke():
+    from .jokes import get_joke
+    return {"joke": get_joke()}
 
 
 @app.get("/favicon.ico")

@@ -9,6 +9,10 @@ services:
       - anchor_data:/data
     environment:
       - DATA_DIR=/data
+      # Ключ для шуток (OpenRouter). Берётся из файла .env (см. .env.example).
+      # Без ключа виджет работает на локальных шутках.
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-meta-llama/llama-3.3-70b-instruct:free}
     restart: unless-stopped
 
 volumes:
