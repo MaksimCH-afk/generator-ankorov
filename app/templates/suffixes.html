@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Внутренние страницы: суффиксы анкоров</h1>
+<p class="sub">Справочник <span class="mono">тип страницы + язык → суффикс</span> (§3.6). Анкор = <span class="mono">{бренд} {суффикс}</span>.</p>
+
+<div class="card">
+    <h2 style="margin-top:0">Добавить / изменить тип страницы</h2>
+    <form method="post" action="/suffixes/save">
+        <div class="field" style="max-width:260px"><label>Тип страницы</label><input name="page_type" id="suf-pagetype" placeholder="app / login / bonus" required></div>
+        <div class="grid grid-3">
+            {% for lang in languages %}
+            <div class="field"><label>{{ lang }}</label><input name="suffix_{{ lang }}" id="suf-{{ lang }}"></div>
+            {% endfor %}
+        </div>
+        <button type="submit">Сохранить</button>
+    </form>
+</div>
+
+<div class="card">
+    <table>
+        <thead><tr><th>Тип</th>{% for lang in languages %}<th>{{ lang }}</th>{% endfor %}<th></th></tr></thead>
+        <tbody>
+        {% for page_type, langs in grid.items() %}
+            <tr>
+                <td class="mono">{{ page_type }}</td>
+                {% for lang in languages %}<td>{{ langs.get(lang, '') or '—' }}</td>{% endfor %}
+                <td class="right row-actions">
+                    <button type="button" class="btn-sec btn-sm"
+                        onclick='editSuffix({{ page_type|tojson }}, {{ langs|tojson }})'>Изменить</button>
+                    <form method="post" action="/suffixes/{{ page_type }}/delete" style="display:inline">
+                        <button class="btn-danger btn-sm" type="submit">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+const LANGS = {{ languages|tojson }};
+function editSuffix(pt, langs) {
+    document.getElementById('suf-pagetype').value = pt;
+    LANGS.forEach(l => document.getElementById('suf-' + l).value = langs[l] || '');
+    window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+{% endblock %}

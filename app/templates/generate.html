@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Генерация</h1>
+<p class="sub">Выберите проекты и формат выгрузки (§6, §7).</p>
+
+<div class="card">
+    <form method="post" action="/generate">
+        <table>
+            <thead><tr><th style="width:40px"><input type="checkbox" onclick="toggleAll(this)"></th><th>URL</th><th>Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th class="num">Ключей</th></tr></thead>
+            <tbody>
+            {% for p in projects %}
+                <tr>
+                    <td><input type="checkbox" name="project_ids" value="{{ p.id }}" checked></td>
+                    <td class="mono">{{ p.url }}</td>
+                    <td>{{ p.strategy.name if p.strategy else '—' }}</td>
+                    <td class="num">{{ p.volume }}</td>
+                    <td class="num">{{ p.crowd_volume }}</td>
+                    <td class="num">{{ p.keywords|length }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <hr>
+        <div class="field" style="max-width:320px">
+            <label>Формат выгрузки</label>
+            <select name="export_format">
+                <option value="zip">ZIP-архив (все файлы)</option>
+                <option value="separate">Раздельные Excel-файлы</option>
+            </select>
+        </div>
+        <button type="submit">⬇ Сгенерировать и скачать</button>
+    </form>
+</div>
+
+<script>
+function toggleAll(cb) { document.querySelectorAll('input[name="project_ids"]').forEach(i => i.checked = cb.checked); }
+</script>
+{% endblock %}

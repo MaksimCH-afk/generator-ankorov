@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    container_name: anchor-generator
+    ports:
+      - "9999:9999"
+    volumes:
+      # Persist the SQLite DB between restarts (§8).
+      - anchor_data:/data
+    environment:
+      - DATA_DIR=/data
+    restart: unless-stopped
+
+volumes:
+  anchor_data:

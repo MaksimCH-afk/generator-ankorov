@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Безанкорные форматы</h1>
+<p class="sub">Доля безанкора дробится по форматам (§3.5). Плейсхолдеры: <span class="mono">{url}</span>, <span class="mono">{domain}</span>. Под-вес — % от общего объёма.</p>
+
+<div class="card">
+    <h2 style="margin-top:0">Добавить / изменить формат</h2>
+    <form method="post" action="/formats/save">
+        <input type="hidden" name="id" id="fmt-id">
+        <div class="grid grid-3">
+            <div class="field"><label>Название</label><input name="name" id="fmt-name" required></div>
+            <div class="field"><label>Шаблон</label><input name="template" id="fmt-template" class="mono" value="{url}" required></div>
+            <div class="field"><label>Под-вес, %</label><input name="sub_weight" id="fmt-weight" type="number" step="0.1" value="0"></div>
+        </div>
+        <div class="field" style="max-width:200px"><label>Позиция</label><input name="position" id="fmt-position" type="number" value="0"></div>
+        <div class="row-actions">
+            <button type="submit">Сохранить</button>
+            <button type="button" class="btn-ghost" onclick="resetFmt()">Очистить</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <table>
+        <thead><tr><th>Позиция</th><th>Название</th><th>Шаблон</th><th>Под-вес</th><th></th></tr></thead>
+        <tbody>
+        {% for f in formats %}
+            <tr>
+                <td>{{ f.position }}</td>
+                <td>{{ f.name }}</td>
+                <td class="mono">{{ f.template }}</td>
+                <td>{{ f.sub_weight }}%</td>
+                <td class="right row-actions">
+                    <button type="button" class="btn-sec btn-sm"
+                        onclick='editFmt({{ f.id }}, {{ f.name|tojson }}, {{ f.template|tojson }}, {{ f.sub_weight }}, {{ f.position }})'>Изменить</button>
+                    <form method="post" action="/formats/{{ f.id }}/delete" style="display:inline">
+                        <button class="btn-danger btn-sm" type="submit">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    <p class="help">Если форматов нет — 100% безанкора уходит в голый URL (§4.3).</p>
+</div>
+
+<script>
+function resetFmt() {
+    document.getElementById('fmt-id').value=''; document.getElementById('fmt-name').value='';
+    document.getElementById('fmt-template').value='{url}'; document.getElementById('fmt-weight').value=0;
+    document.getElementById('fmt-position').value=0;
+}
+function editFmt(id, name, tpl, weight, pos) {
+    document.getElementById('fmt-id').value=id; document.getElementById('fmt-name').value=name;
+    document.getElementById('fmt-template').value=tpl; document.getElementById('fmt-weight').value=weight;
+    document.getElementById('fmt-position').value=pos;
+    window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+{% endblock %}

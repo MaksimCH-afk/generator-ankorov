@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Генератор URL-анкоров{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">⚓ Генератор анкоров</div>
+    <nav>
+        <a href="/" class="{{ 'on' if active=='dashboard' }}">Проекты</a>
+        <a href="/strategies" class="{{ 'on' if active=='strategies' }}">Стратегии</a>
+        <a href="/formats" class="{{ 'on' if active=='formats' }}">Безанкорные форматы</a>
+        <a href="/suffixes" class="{{ 'on' if active=='suffixes' }}">Внутренние страницы</a>
+        <a href="/generate" class="{{ 'on' if active=='generate' }}">Генерация</a>
+    </nav>
+</header>
+<main>
+    {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+    {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+    {% block content %}{% endblock %}
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

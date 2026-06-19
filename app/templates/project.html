@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row-actions" style="justify-content:space-between">
+    <h1 style="margin:0">{{ project.url }}</h1>
+    <a class="btn btn-sec btn-sm" href="/projects/{{ project.id }}/preview">Превью результата</a>
+</div>
+<p class="sub mono">{{ project.brand }} · {{ project.language }}</p>
+
+<div class="card">
+    <h2 style="margin-top:0">Параметры проекта</h2>
+    <form method="post" action="/projects/{{ project.id }}/update">
+        <div class="grid grid-3">
+            <div class="field"><label>URL домена</label><input name="url" value="{{ project.url }}" required></div>
+            <div class="field"><label>Язык статьи</label><input name="language" value="{{ project.language }}"></div>
+            <div class="field"><label>Бренд</label><input name="brand" value="{{ project.brand }}"></div>
+        </div>
+        <div class="grid grid-3">
+            <div class="field">
+                <label>Стратегия (прогоны)</label>
+                <select name="strategy_id">
+                    <option value="">— не выбрана —</option>
+                    {% for s in strategies %}
+                    <option value="{{ s.id }}" {{ 'selected' if project.strategy_id==s.id }}>{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field"><label>Объём «Прогоны»</label><input name="volume" type="number" value="{{ project.volume }}"></div>
+            <div class="field"><label>Объём «Крауд+сабмиты»</label><input name="crowd_volume" type="number" value="{{ project.crowd_volume }}"></div>
+        </div>
+
+        <h2>Внутренние страницы</h2>
+        <div class="grid grid-3">
+            <div class="field">
+                <label>Язык анкоров внутренних страниц</label>
+                <select name="internal_language">
+                    {% for lang in languages %}
+                    <option value="{{ lang }}" {{ 'selected' if project.internal_language==lang }}>{{ lang }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <label>Тип страницы → URL-путь</label>
+        <div id="internal-pages">
+            {% for pt, path in internal_pages.items() %}
+            <div class="inline" style="margin-bottom:0.5rem">
+                <input name="ip_type" list="page-types" value="{{ pt }}" placeholder="app">
+                <input name="ip_path" class="mono" value="{{ path }}" placeholder="/app/">
+                <button type="button" class="btn-danger btn-sm narrow" onclick="this.parentElement.remove()">✕</button>
+            </div>
+            {% endfor %}
+        </div>
+        <datalist id="page-types">{% for pt in page_types %}<option value="{{ pt }}">{% endfor %}</datalist>
+        <button type="button" class="btn-sec btn-sm" onclick="addInternal()">+ Страница</button>
+
+        <h2>Перераспределение отсутствующих ролей (опционально)</h2>
+        <p class="help">JSON: <span class="mono">{"добавочный 2": {"основной 1": 100}}</span>. Пусто → освободившийся % уходит в безанкор (§4.2).</p>
+        <textarea name="redistribution_json">{{ project.redistribution_json if project.redistribution_json != '{}' else '' }}</textarea>
+
+        <hr>
+        <div class="row-actions">
+            <button type="submit">Сохранить проект</button>
+            <form method="post" action="/projects/{{ project.id }}/delete" style="display:inline" onsubmit="return confirm('Удалить проект?')">
+                <button class="btn-danger" type="submit">Удалить проект</button>
+            </form>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0">Частотка ({{ keywords|length }} ключей)</h2>
+    <form method="post" action="/projects/{{ project.id }}/keywords" enctype="multipart/form-data" class="inline">
+        <input type="file" name="file" accept=".csv,.xlsx,.xlsm">
+        <button class="narrow" type="submit">Загрузить</button>
+    </form>
+    <p class="help">Файл <span class="mono">keyword | frequency</span> (CSV или Excel). Загрузка заменяет текущую частотку.</p>
+    {% if keywords %}
+    <table>
+        <thead><tr><th>#</th><th>Ключ</th><th class="num">Частотность</th></tr></thead>
+        <tbody>
+        {% for k in keywords %}<tr><td>{{ loop.index }}</td><td>{{ k.keyword }}</td><td class="num">{{ k.frequency }}</td></tr>{% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+
+<script>
+const PAGE_TYPES = {{ page_types|tojson }};
+function addInternal() {
+    const div = document.createElement('div');
+    div.className = 'inline'; div.style.marginBottom = '0.5rem';
+    div.innerHTML = `<input name="ip_type" list="page-types" placeholder="app">
+        <input name="ip_path" class="mono" placeholder="/app/">
+        <button type="button" class="btn-danger btn-sm narrow" onclick="this.parentElement.remove()">✕</button>`;
+    document.getElementById('internal-pages').appendChild(div);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Стратегии (профили анкоров)</h1>
+<p class="sub">Безанкор + роли ключей в процентах. Сумма всех весов должна быть 100% (§3.3, §9).</p>
+
+<div class="card">
+    <h2 style="margin-top:0">Создать / редактировать стратегию</h2>
+    <form method="post" action="/strategies/save" id="strategy-form">
+        <input type="hidden" name="id" id="strategy-id">
+        <div class="grid grid-2">
+            <div class="field"><label>Название</label><input name="name" id="strategy-name" required></div>
+            <div class="field"><label>Безанкор, %</label><input name="anchorless_percent" id="strategy-anchorless" type="number" step="0.1" value="70" oninput="recalcSum()"></div>
+        </div>
+        <label>Роли ключей</label>
+        <div id="roles"></div>
+        <div class="spacer"></div>
+        <div class="row-actions">
+            <button type="button" class="btn-sec btn-sm" onclick="addRole()">+ Добавить роль</button>
+            <span class="muted">Сумма: <span id="sum-badge" class="sum-badge">—</span></span>
+        </div>
+        <hr>
+        <div class="row-actions">
+            <button type="submit">Сохранить</button>
+            <button type="button" class="btn-ghost" onclick="resetStrategyForm()">Очистить</button>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <table>
+        <thead><tr><th>Название</th><th>Безанкор</th><th>Роли</th><th></th></tr></thead>
+        <tbody>
+        {% for s in strategies %}
+            <tr>
+                <td>{{ s.obj.name }} {% if s.obj.is_builtin %}<span class="pill">базовая</span>{% endif %}</td>
+                <td>{{ s.obj.anchorless_percent }}%</td>
+                <td>{% for r in s.roles %}<span class="pill accent">{{ r.name }} {{ r.percent }}%</span> {% endfor %}{% if not s.roles %}<span class="muted">—</span>{% endif %}</td>
+                <td class="right row-actions">
+                    <button type="button" class="btn-sec btn-sm"
+                        onclick='editStrategy({{ s.obj.id }}, {{ s.obj.name|tojson }}, {{ s.obj.anchorless_percent }}, {{ s.roles|tojson }})'>Изменить</button>
+                    <form method="post" action="/strategies/{{ s.obj.id }}/delete" style="display:inline" onsubmit="return confirm('Удалить стратегию?')">
+                        <button class="btn-danger btn-sm" type="submit">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+function roleRow(name, percent) {
+    const div = document.createElement('div');
+    div.className = 'inline';
+    div.style.marginBottom = '0.5rem';
+    div.innerHTML = `
+        <input name="role_name" placeholder="напр. основной 1" value="${name||''}">
+        <input class="narrow" name="role_percent" type="number" step="0.1" placeholder="%" value="${percent!==undefined?percent:''}" oninput="recalcSum()">
+        <button type="button" class="btn-danger btn-sm narrow" onclick="this.parentElement.remove();recalcSum()">✕</button>`;
+    return div;
+}
+function addRole(name, percent) { document.getElementById('roles').appendChild(roleRow(name, percent)); }
+function recalcSum() {
+    let sum = parseFloat(document.getElementById('strategy-anchorless').value) || 0;
+    document.querySelectorAll('input[name="role_percent"]').forEach(i => sum += parseFloat(i.value) || 0);
+    const badge = document.getElementById('sum-badge');
+    badge.textContent = sum.toFixed(1).replace(/\.0$/, '') + '%';
+    badge.className = 'sum-badge ' + (Math.abs(sum - 100) < 0.01 ? 'sum-ok' : 'sum-bad');
+}
+function resetStrategyForm() {
+    document.getElementById('strategy-id').value = '';
+    document.getElementById('strategy-name').value = '';
+    document.getElementById('strategy-anchorless').value = 70;
+    document.getElementById('roles').innerHTML = '';
+    addRole('основной 1', 12); addRole('основной 2', 9); addRole('добавочный 1', 5); addRole('добавочный 2', 4);
+    recalcSum();
+}
+function editStrategy(id, name, anchorless, roles) {
+    document.getElementById('strategy-id').value = id;
+    document.getElementById('strategy-name').value = name;
+    document.getElementById('strategy-anchorless').value = anchorless;
+    document.getElementById('roles').innerHTML = '';
+    roles.forEach(r => addRole(r.name, r.percent));
+    recalcSum();
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+resetStrategyForm();
+</script>
+{% endblock %}

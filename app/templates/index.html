@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Проекты</h1>
+<p class="sub">Домены для обработки. На каждый проект — частотка, стратегия и внутренние страницы.</p>
+
+<div class="card">
+    <h2 style="margin-top:0">Новый проект</h2>
+    <form method="post" action="/projects/create">
+        <div class="grid grid-3">
+            <div class="field"><label>URL домена</label><input name="url" placeholder="https://site.com/" required></div>
+            <div class="field"><label>Язык статьи</label><input name="language" value="English"></div>
+            <div class="field"><label>Бренд</label><input name="brand" placeholder="cowboy spin"></div>
+        </div>
+        <button type="submit">Создать проект</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2 style="margin-top:0">Пакетная загрузка частоток</h2>
+    <p class="help">Несколько файлов сразу (§5.2). Файл сопоставляется проекту по домену в имени файла (напр. <span class="mono">cowboyspin.csv → cowboyspin-ceska.org</span>).</p>
+    <form method="post" action="/projects/batch-keywords" enctype="multipart/form-data" class="inline">
+        <input type="file" name="files" multiple accept=".csv,.xlsx,.xlsm">
+        <button class="narrow" type="submit">Загрузить</button>
+    </form>
+</div>
+
+<div class="card">
+    {% if projects %}
+    <table>
+        <thead><tr><th>URL</th><th>Бренд</th><th>Стратегия</th><th class="num">Прогоны</th><th class="num">Крауд</th><th class="num">Ключей</th><th></th></tr></thead>
+        <tbody>
+        {% for p in projects %}
+            <tr>
+                <td><a href="/projects/{{ p.id }}" class="mono">{{ p.url }}</a></td>
+                <td>{{ p.brand or '—' }}</td>
+                <td>{{ p.strategy.name if p.strategy else '—' }}</td>
+                <td class="num">{{ p.volume }}</td>
+                <td class="num">{{ p.crowd_volume }}</td>
+                <td class="num">{{ p.keywords|length }}</td>
+                <td class="right row-actions">
+                    <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}/preview">Превью</a>
+                    <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}">Изменить</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Пока нет проектов. Создайте первый выше.</p>
+    {% endif %}
+</div>
+{% endblock %}
