@@ -33,6 +33,16 @@
                 </select>
             </div>
         </div>
+        <hr>
+        <label class="toggle-row">
+            <input type="checkbox" name="smart_filter" id="f-smart" value="on">
+            <span>
+                <b>Умное распознавание анкоров</b> — исключать ключи, похожие по смыслу на стоп-анкоры
+                ({{ ignore_count }} шт., список в разделе «Стоп-анкоры»).
+                {% if smart_semantic %}<span class="badge green" style="margin-left:6px">смысловой режим</span>
+                {% else %}<span class="badge gray" style="margin-left:6px">по словам — добавьте ключи OpenRouter в «Логах» для смыслового режима</span>{% endif %}
+            </span>
+        </label>
     </div>
 
     <div class="selectall">
@@ -71,20 +81,9 @@
                 {{ bar(v.segments) }}
                 <div class="row-actions" style="justify-content:space-between;align-items:flex-start">
                     {{ legend(v.segments) }}
-                    {% if v.breakdown %}<button type="button" class="btn-link" onclick="toggleDist({{ p.id }})">Показать анкоры ▾</button>{% endif %}
+                    {% if v.ready %}<button type="button" class="btn-link" id="distbtn-{{ p.id }}" onclick="loadDist({{ p.id }})">Показать анкоры ▾</button>{% endif %}
                 </div>
-                {% if v.breakdown %}
-                <div class="dist" id="dist-{{ p.id }}" style="display:none">
-                    <div class="dist-grid dist-head">
-                        <div>Анкор</div><div class="num">Ссылок</div><div class="num">Доля</div>
-                    </div>
-                    {% for b in v.breakdown %}
-                    <div class="dist-grid dist-row">
-                        <div class="mono">{{ b.anchor }}</div><div class="num">{{ b.count }}</div><div class="num">{{ b.percent }}%</div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
+                <div class="dist" id="dist-{{ p.id }}" style="display:none"></div>
             {% else %}
                 <div class="help-text">Выберите стратегию и задайте объём, чтобы увидеть распределение.</div>
             {% endif %}
@@ -140,7 +139,19 @@ function post(url, body){ return fetch(url, {method:'POST', headers:{'Content-Ty
 function setStrategy(pid, v){ post('/projects/'+pid+'/strategy', 'strategy_id='+encodeURIComponent(v)).then(()=>location.reload()); }
 function setVolume(pid, v){ post('/projects/'+pid+'/volume', 'volume='+encodeURIComponent(v)+'&next=/generate').then(()=>location.reload()); }
 function setLang(pid, v){ post('/projects/'+pid+'/language', 'language='+encodeURIComponent(v)).then(()=>location.reload()); }
-function toggleDist(pid){ const e=document.getElementById('dist-'+pid); e.style.display = e.style.display==='none' ? 'block' : 'none'; }
+function loadDist(pid){
+    const box=document.getElementById('dist-'+pid);
+    const btn=document.getElementById('distbtn-'+pid);
+    if(box.style.display!=='none'){ box.style.display='none'; btn.textContent='Показать анкоры ▾'; return; }
+    box.style.display='block'; btn.textContent='Скрыть анкоры ▴';
+    if(box.dataset.loaded){ return; }
+    box.innerHTML='<div style="padding:12px 14px;color:#9097A2;font-size:12.5px">Считаем…</div>';
+    fetch('/projects/'+pid+'/breakdown').then(r=>r.json()).then(d=>{
+        let html='<div class="dist-grid dist-head"><div>Анкор</div><div class="num">Ссылок</div><div class="num">Доля</div></div>';
+        (d.rows||[]).forEach(b=>{ html+='<div class="dist-grid dist-row"><div class="mono">'+b.anchor+'</div><div class="num">'+b.count+'</div><div class="num">'+b.percent+'%</div></div>'; });
+        box.innerHTML=html; box.dataset.loaded='1';
+    }).catch(()=>{ box.innerHTML='<div style="padding:12px 14px;color:#E5484D">Не удалось загрузить.</div>'; });
+}
 
 function recount(){
     let n=0, links=0;
@@ -160,9 +171,16 @@ function toggleAll(cb){ document.querySelectorAll('input[name="project_ids"]').f
 
 // persist export params across reloads (inline edits reload the page)
 const PARAMS=['f-sprint','f-seo','f-format','f-group'];
-function saveParams(){ PARAMS.forEach(id=>{const e=document.getElementById(id); if(e) localStorage.setItem('gen_'+id, e.value);}); }
-function restoreParams(){ PARAMS.forEach(id=>{const e=document.getElementById(id); const v=localStorage.getItem('gen_'+id); if(e&&v!==null) e.value=v;}); }
+function saveParams(){
+    PARAMS.forEach(id=>{const e=document.getElementById(id); if(e) localStorage.setItem('gen_'+id, e.value);});
+    const sm=document.getElementById('f-smart'); if(sm) localStorage.setItem('gen_smart', sm.checked?'1':'0');
+}
+function restoreParams(){
+    PARAMS.forEach(id=>{const e=document.getElementById(id); const v=localStorage.getItem('gen_'+id); if(e&&v!==null) e.value=v;});
+    const sm=document.getElementById('f-smart'); if(sm) sm.checked = localStorage.getItem('gen_smart')==='1';
+}
 PARAMS.forEach(id=>{const e=document.getElementById(id); if(e) e.addEventListener('change', saveParams);});
+(function(){const sm=document.getElementById('f-smart'); if(sm) sm.addEventListener('change', saveParams);})();
 
 function runGenerate(){
     const btn=document.getElementById('gen-btn');

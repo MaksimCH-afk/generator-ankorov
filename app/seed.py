@@ -9,7 +9,7 @@ import json
 from sqlalchemy import text
 
 from .database import Base, SessionLocal, engine
-from .models import AnchorlessProfile, InternalPageSuffix, Strategy
+from .models import AnchorlessProfile, IgnoreAnchor, InternalPageSuffix, Strategy
 
 BASE_STRATEGIES = [
     {
@@ -58,6 +58,12 @@ BASE_PROFILES = [
         "name": "Голый домен 60% + Голый URL 15%",
         "items": [{**BARE_DOMAIN, "percent": 60}, {**BARE_URL, "percent": 15}],
     },
+]
+
+# Default stop-phrases for the smart anchor filter (editable on the dashboard).
+BASE_IGNORE_ANCHORS = [
+    "login", "no deposit bonus", "no deposit bonus code", "trustpilot",
+    "reviews", "free spins", "tv", "youtube", "no deposit",
 ]
 
 # page_type -> {language -> suffix}. Starter set; editable on the dashboard (§3.6).
@@ -113,6 +119,9 @@ def seed() -> None:
             for page_type, langs in BASE_SUFFIXES.items():
                 for lang, suffix in langs.items():
                     db.add(InternalPageSuffix(page_type=page_type, language=lang, suffix=suffix))
+        if db.query(IgnoreAnchor).count() == 0:
+            for phrase in BASE_IGNORE_ANCHORS:
+                db.add(IgnoreAnchor(phrase=phrase))
         db.commit()
     finally:
         db.close()

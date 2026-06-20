@@ -51,36 +51,54 @@
 </div>
 
 {% if project_views %}
-<div class="stack" id="proj-list">
-    {% for v in project_views %}
-    {% set p = v.obj %}{% set pr = progress[p.id] %}
-    <div class="item-card" data-domain="{{ p.url|lower }}">
-        <div class="item-head">
-            <div style="flex:1;min-width:0">
-                <div style="font-size:14px;font-weight:700;color:#1B1E24">{{ p.url|replace('https://','')|replace('http://','')|replace('/','') }}</div>
-                <div class="mono" style="font-size:11.5px;color:var(--muted-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.url }}</div>
+<form method="post" id="bulk-form">
+    <div class="selectall">
+        <input type="checkbox" id="select-all" onchange="toggleAll(this)">
+        <span>Выбрать все · выбрано <b id="sel-count">0</b></span>
+        <div style="flex:1"></div>
+        <select id="bulk-strategy" style="width:auto">
+            <option value="">— стратегия —</option>
+            {% for o in strategy_options %}<option value="{{ o.id }}">{{ o.label }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="btn-sec btn-sm" formaction="/projects/bulk-strategy"
+                onclick="document.getElementById('bs-hidden').value=document.getElementById('bulk-strategy').value">Назначить</button>
+        <button type="submit" class="btn-danger btn-sm" formaction="/projects/bulk-delete"
+                onclick="return confirm('Удалить выбранные проекты?')">Удалить выбранные</button>
+        <input type="hidden" name="strategy_id" id="bs-hidden">
+    </div>
+
+    <div class="stack" id="proj-list">
+        {% for v in project_views %}
+        {% set p = v.obj %}{% set pr = progress[p.id] %}
+        <div class="item-card" data-domain="{{ p.url|lower }}">
+            <div class="item-head">
+                <input type="checkbox" name="project_ids" value="{{ p.id }}" onchange="recount()" style="flex:none">
+                <div style="flex:1;min-width:0">
+                    <div style="font-size:14px;font-weight:700;color:#1B1E24">{{ p.url|replace('https://','')|replace('http://','')|replace('/','') }}</div>
+                    <div class="mono" style="font-size:11.5px;color:var(--muted-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.url }}</div>
+                </div>
+                <span class="badge purple">{{ v.strategy_name }}</span>
+                <span style="font-size:12.5px;color:var(--muted)">{{ p.keywords|length }} кл. · {{ p.volume }} · {{ v.lang_label }}</span>
+                {% if pr.ready %}<span class="badge green">Готов</span>{% else %}<span class="badge amber">Не настроен</span>{% endif %}
             </div>
-            <span class="badge purple">{{ v.strategy_name }}</span>
-            <span style="font-size:12.5px;color:var(--muted)">{{ p.keywords|length }} кл. · {{ p.volume }} · {{ v.lang_label }}</span>
-            {% if pr.ready %}<span class="badge green">Готов</span>{% else %}<span class="badge amber">Не настроен</span>{% endif %}
-        </div>
-        {% if v.segments %}
-            {{ bar(v.segments) }}
-            <div class="row-actions" style="justify-content:space-between;align-items:flex-start">
-                {{ legend(v.segments) }}
-                <div class="row-actions" style="flex:none">
-                    {% if pr.ready %}<a class="btn btn-soft btn-sm" href="/projects/{{ p.id }}/export">⬇ Выгрузить</a>{% endif %}
+            {% if v.segments %}
+                {{ bar(v.segments) }}
+                <div class="row-actions" style="justify-content:space-between;align-items:flex-start">
+                    {{ legend(v.segments) }}
+                    <div class="row-actions" style="flex:none">
+                        {% if pr.ready %}<a class="btn btn-soft btn-sm" href="/projects/{{ p.id }}/export">⬇ Выгрузить</a>{% endif %}
+                        <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}">Открыть</a>
+                    </div>
+                </div>
+            {% else %}
+                <div class="row-actions" style="justify-content:flex-end">
                     <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}">Открыть</a>
                 </div>
-            </div>
-        {% else %}
-            <div class="row-actions" style="justify-content:flex-end">
-                <a class="btn btn-sec btn-sm" href="/projects/{{ p.id }}">Открыть</a>
-            </div>
-        {% endif %}
+            {% endif %}
+        </div>
+        {% endfor %}
     </div>
-    {% endfor %}
-</div>
+</form>
 <div class="row-actions" style="justify-content:flex-end;margin-top:16px">
     <form method="post" action="/projects/delete-all" onsubmit="return confirm('Удалить ВСЕ проекты? Необратимо.')">
         <button class="btn-danger btn-sm" type="submit">Удалить все проекты</button>
@@ -105,5 +123,12 @@ function filterProjects(q){
         c.style.display = c.dataset.domain.includes(q) ? '' : 'none';
     });
 }
+function recount(){
+    const all=document.querySelectorAll('input[name="project_ids"]');
+    const n=[...all].filter(c=>c.checked).length;
+    const sc=document.getElementById('sel-count'); if(sc) sc.textContent=n;
+    const sa=document.getElementById('select-all'); if(sa) sa.checked = all.length>0 && n===all.length;
+}
+function toggleAll(cb){ document.querySelectorAll('input[name="project_ids"]').forEach(c=>c.checked=cb.checked); recount(); }
 </script>
 {% endblock %}

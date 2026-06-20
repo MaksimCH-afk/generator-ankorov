@@ -279,6 +279,8 @@ tbody tr:hover td { background: var(--surface-2); }
 .log-WARNING { background: var(--amber-soft); color: var(--amber); }
 .log-ERROR { background: #FEECEC; color: #D63A3F; }
 hr { border: none; border-top: 1px solid var(--line); margin: 18px 0; }
+.toggle-row { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; color: #4A4F59; cursor: pointer; line-height: 1.5; }
+.toggle-row input { margin-top: 2px; flex: none; }
 .sum-badge { font-weight: 700; }
 .sum-ok { color: var(--green); }
 .sum-bad { color: var(--red); }

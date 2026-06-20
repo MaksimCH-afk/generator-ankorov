@@ -206,3 +206,13 @@ class AppSetting(Base):
 
     key = Column(String, primary_key=True)
     value = Column(Text, nullable=False, default="")
+
+
+class IgnoreAnchor(Base):
+    """A stop-phrase: keywords semantically similar to it are excluded from the
+    strategy when smart anchor filtering is enabled (e.g. "login", "free spins")."""
+
+    __tablename__ = "ignore_anchors"
+
+    id = Column(Integer, primary_key=True)
+    phrase = Column(String, unique=True, nullable=False)

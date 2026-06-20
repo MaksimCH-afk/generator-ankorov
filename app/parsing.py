@@ -105,11 +105,17 @@ def _looks_like_domain(value: str) -> bool:
 
 
 def normalize_domain(value: str) -> str:
-    """Normalise a domain/URL to ``https://host/...`` (http -> https, add scheme)."""
+    """Normalise a domain/URL to ``https://host/...``.
+
+    Forces https, drops a leading ``www.``, and ensures a trailing slash on the
+    root form — so ``http://www.site.com`` and ``site.com/`` collapse to the same
+    canonical URL (avoids duplicate projects).
+    """
     v = value.strip()
     if not re.match(r"^https?://", v, re.I):
         v = "https://" + v
     v = re.sub(r"^http://", "https://", v, flags=re.I)
+    v = re.sub(r"^https://www\.", "https://", v, flags=re.I)
     # Ensure the root form ends with a single slash.
     if "/" not in v.split("://", 1)[1]:
         v += "/"

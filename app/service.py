@@ -141,7 +141,8 @@ def load_suffix_lookup(db: Session) -> dict[str, dict[str, str]]:
     return lookup
 
 
-def project_to_gen(db: Session, project: Project) -> gen.ProjectInput:
+def project_to_gen(db: Session, project: Project, exclude: set[str] | None = None) -> gen.ProjectInput:
+    exclude = exclude or set()
     internal_pages = [
         gen.InternalPage(page_type=pt, url_path=path)
         for pt, path in json.loads(project.internal_pages_json or "{}").items()
@@ -149,6 +150,7 @@ def project_to_gen(db: Session, project: Project) -> gen.ProjectInput:
     keywords = [
         gen.KeywordInput(keyword=k.keyword, frequency=float(k.frequency), position=k.position)
         for k in project.keywords
+        if k.keyword not in exclude
     ]
     return gen.ProjectInput(
         url=project.url,
@@ -188,13 +190,15 @@ def project_breakdown(db: Session, project: Project) -> list[dict]:
     ]
 
 
-def generate_project_sheets(db: Session, project: Project) -> dict[str, list[gen.GeneratedRow]]:
+def generate_project_sheets(db: Session, project: Project,
+                            exclude_keywords: set[str] | None = None) -> dict[str, list[gen.GeneratedRow]]:
     """Build the sheets for a project (§6).
 
     One volume + one strategy. The strategy decides the campaign type: a
     strategy with anchor roles → "Прогоны", a 100%-anchorless one → "Крауд+сабмиты".
+    ``exclude_keywords`` drops keywords filtered out by the smart anchor filter.
     """
-    pin = project_to_gen(db, project)
+    pin = project_to_gen(db, project, exclude_keywords)
     formats = formats_for_project(db, project)
     sheets: dict[str, list[gen.GeneratedRow]] = {}
 

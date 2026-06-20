@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block page_title %}Стоп-анкоры{% endblock %}
+{% block subtitle %}Слова/фразы, по которым ключи исключаются из стратегии при включённом умном фильтре.{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-title">Добавить стоп-анкоры</div>
+    <form method="post" action="/anchors/add">
+        <label>Фразы (по одной на строку или через запятую)</label>
+        <textarea name="phrases" placeholder="login&#10;free spins&#10;no deposit bonus" style="min-height:90px"></textarea>
+        <div class="spacer"></div>
+        <button type="submit">Добавить</button>
+    </form>
+    <p class="help-text">
+        {% if smart_semantic %}
+        Ключи сверяются <b>по смыслу</b> нейросетью (ключи OpenRouter подключены) — отсекаются даже синонимы и переформулировки.
+        {% else %}
+        Ключи OpenRouter не подключены — фильтр работает по вхождению слов (подстрока). Для смысловой проверки добавьте ключи в «Логах».
+        {% endif %}
+    </p>
+</div>
+
+<div class="card flush">
+    {% if phrases %}
+    <div class="table-wrap">
+    <table>
+        <thead><tr><th>Стоп-анкор</th><th></th></tr></thead>
+        <tbody>
+        {% for a in phrases %}
+            <tr>
+                <td class="mono">{{ a.phrase }}</td>
+                <td class="num">
+                    <form method="post" action="/anchors/{{ a.id }}/delete" style="display:inline">
+                        <button class="btn-danger btn-sm" type="submit">Удалить</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div style="padding:22px 24px"><p class="muted" style="margin:0">Список пуст. Добавьте стоп-анкоры выше.</p></div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block help_text %}
+<p>Здесь задаются <b>стоп-анкоры</b> — слова или фразы, ключи по смыслу похожие на которые не попадут в стратегию. Например, стоп-анкор «login» исключит даже самый высокочастотный ключ про вход в аккаунт, как бы он ни был сформулирован.</p>
+<p>Важно: это не простое отсечение по словам. Если подключены ключи OpenRouter (раздел «Логи»), две модели сверяют ключи со стоп-списком <b>по смыслу</b> (работают параллельно — список делится пополам для скорости). Без ключей применяется запасной вариант — совпадение по вхождению слова.</p>
+<p>Фильтр <b>необязательный</b> и включается галочкой «Умное распознавание анкоров» на экране «Генерация» — там же, где Sprint, SEO Specialist и формат выгрузки.</p>
+{% endblock %}
