@@ -37,8 +37,7 @@
         <label class="toggle-row">
             <input type="checkbox" name="smart_filter" id="f-smart" value="on">
             <span>
-                <b>Умное распознавание анкоров</b> — исключать ключи, похожие по смыслу на стоп-анкоры
-                ({{ ignore_count }} шт., список в разделе «Стоп-анкоры»).
+                <b>Умное распознавание анкоров</b>
                 {% if smart_semantic %}<span class="badge green" style="margin-left:6px">смысловой режим</span>
                 {% else %}<span class="badge gray" style="margin-left:6px">по словам — добавьте ключи OpenRouter в «Логах» для смыслового режима</span>{% endif %}
             </span>

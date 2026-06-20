@@ -95,9 +95,10 @@ a { color: var(--accent); text-decoration: none; }
 .joke-text { font-size: 13px; color: #4A4357; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .joke-refresh {
     flex: none; display: flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; background: #fff; color: var(--accent); border: 1px solid #E3D7F8;
+    width: 30px; height: 30px; padding: 0; background: #fff; color: var(--accent); border: 1px solid #E3D7F8;
     border-radius: 8px; cursor: pointer;
 }
+.joke-refresh svg { display: block; }
 .joke-refresh:hover { background: #F6F1FE; }
 
 .content { flex: 1; overflow-y: auto; padding: 30px 34px 90px; }
