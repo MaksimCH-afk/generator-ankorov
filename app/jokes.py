@@ -16,11 +16,13 @@ from __future__ import annotations
 import json
 import random
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections import deque
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/key"
 
 FALLBACK_JOKES = [
     "Клиент: «А гарантии есть?» SEO-специалист молча показывает на логотип Google.",
@@ -93,7 +95,7 @@ _lock = threading.Lock()
 _refilling = {"on": False}
 
 
-def openrouter_chat(key: str, model: str, prompt: str, max_tokens: int = 400, timeout: int = 12) -> str | None:
+def openrouter_chat(key: str, model: str, prompt: str, max_tokens: int = 400, timeout: int = 20) -> str | None:
     payload = {
         "model": model,
         "messages": [
@@ -114,12 +116,20 @@ def openrouter_chat(key: str, model: str, prompt: str, max_tokens: int = 400, ti
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        return data["choices"][0]["message"]["content"].strip() or None
-    except Exception:
-        return None
+    # Free models often answer 429 (busy); retry once after a short backoff.
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            return data["choices"][0]["message"]["content"].strip() or None
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt == 0:
+                time.sleep(2)
+                continue
+            return None
+        except Exception:
+            return None
+    return None
 
 
 def _clean(line: str) -> str:
@@ -147,6 +157,43 @@ def batch_jokes(key: str, model: str, n: int = 12) -> list[str]:
 def ping(key: str, model: str) -> bool:
     """Lightweight check that a key/model works."""
     return bool(openrouter_chat(key, model, "Скажи одно слово: ок.", max_tokens=8, timeout=10))
+
+
+def check_key(key: str, timeout: int = 8) -> tuple[bool, str]:
+    """Validate the API key itself via OpenRouter's key endpoint.
+
+    Hits ``GET /api/v1/key`` which authenticates the key WITHOUT invoking any
+    model — so a slow/busy model (timeout, 429) can't make a valid key look
+    broken. Returns ``(ok, detail)``.
+    """
+    req = urllib.request.Request(
+        OPENROUTER_KEY_URL,
+        headers={"Authorization": f"Bearer {key}"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        d = data.get("data") or {}
+        limit = d.get("limit")
+        usage = d.get("usage")
+        if limit is not None:
+            return True, f"активен (использовано {usage}/{limit})"
+        return True, "активен"
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")
+        msg = body[:110]
+        try:
+            msg = json.loads(body).get("error", {}).get("message", msg)
+        except Exception:
+            pass
+        if e.code in (401, 403):
+            return False, f"ключ недействителен ({e.code})"
+        return False, f"{e.code}: {msg[:100]}"
+    except urllib.error.URLError as e:
+        return False, f"нет сети: {e.reason}"
+    except Exception as e:  # pragma: no cover
+        return False, str(e)[:110]
 
 
 def probe(key: str, model: str, timeout: int = 8) -> tuple[bool, str]:

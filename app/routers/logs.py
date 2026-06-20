@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .. import appsettings
 from ..database import get_db
-from ..jokes import get_joke, probe
+from ..jokes import check_key, get_joke
 from ..logging_util import log_event
 from ..models import Log
 from ..templating import templates
@@ -86,17 +86,18 @@ def save_openrouter_key(db: Session = Depends(get_db), slot: int = Form(...),
 
 @router.post("/settings/openrouter-check")
 def check_openrouter_keys(db: Session = Depends(get_db)):
-    # Read keys/models in the request thread, then probe both slots in parallel
+    # Read keys in the request thread, then validate both slots in parallel
     # (no DB access inside the worker threads) so the check never drags on.
-    creds = {slot: (appsettings.get_setting(db, f"or_key_{slot}", "").strip(),
-                    appsettings.get_model(db, slot)) for slot in (1, 2)}
+    # We check the KEY itself (auth), not a model — a slow/busy model must not
+    # make a valid key look broken.
+    keys = {slot: appsettings.get_setting(db, f"or_key_{slot}", "").strip() for slot in (1, 2)}
 
     def check(slot: int) -> str:
-        key, model = creds[slot]
+        key = keys[slot]
         if not key:
             return f"слот {slot}: пусто"
-        ok, detail = probe(key, model)
-        return f"слот {slot}: {'✓ активен' if ok else '✗ ' + detail}"
+        ok, detail = check_key(key)
+        return f"слот {slot}: {'✓ ' + detail if ok else '✗ ' + detail}"
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         parts = list(ex.map(check, (1, 2)))
