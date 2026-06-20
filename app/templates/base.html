@@ -84,26 +84,25 @@
 </div>
 
 <script>
-// G: keep the same joke across page navigations (sessionStorage); fetch a fresh
-// one only on first load of the session or when the refresh button is pressed.
-function loadJoke(force) {
+// Fetch a fresh joke on every page load (so it changes when you switch tabs)
+// and on the refresh button. The server dedupes (no repeats) and answers
+// instantly, so this is cheap. We show the cached joke first to avoid a flicker
+// while the new one loads.
+function loadJoke() {
     const box = document.getElementById('joke-text');
     if (!box) return;
-    if (!force) {
-        const cached = sessionStorage.getItem('seo_joke');
-        if (cached) { box.textContent = cached; return; }
-    }
-    box.textContent = 'Думаем над шуткой…';
+    const cached = sessionStorage.getItem('seo_joke');
+    box.textContent = cached || 'Думаем над шуткой…';
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 6000);
     fetch('/api/joke', { signal: ctrl.signal }).then(r => r.json())
-        .then(d => { const j = d.joke || '…'; box.textContent = j; sessionStorage.setItem('seo_joke', j); })
-        .catch(() => { box.textContent = 'SEO-шутка на переиндексации 🙂'; })
+        .then(d => { const j = d.joke || cached || '…'; box.textContent = j; sessionStorage.setItem('seo_joke', j); })
+        .catch(() => { if (!cached) box.textContent = 'SEO-шутка на переиндексации 🙂'; })
         .finally(() => clearTimeout(t));
 }
-document.addEventListener('DOMContentLoaded', function(){ loadJoke(false); });
+document.addEventListener('DOMContentLoaded', loadJoke);
 var jr = document.getElementById('joke-refresh');
-if (jr) jr.addEventListener('click', function(){ loadJoke(true); });
+if (jr) jr.addEventListener('click', loadJoke);
 </script>
 {% block scripts %}{% endblock %}
 </body>
