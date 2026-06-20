@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import random
+import urllib.error
 import urllib.request
 from collections import deque
 
@@ -143,6 +144,38 @@ def batch_jokes(key: str, model: str, n: int = 12) -> list[str]:
 def ping(key: str, model: str) -> bool:
     """Lightweight check that a key/model works."""
     return bool(openrouter_chat(key, model, "Скажи одно слово: ок.", max_tokens=8, timeout=10))
+
+
+def probe(key: str, model: str) -> tuple[bool, str]:
+    """Diagnostic check — returns ``(ok, detail)`` with the real reason on failure."""
+    payload = {"model": model, "messages": [{"role": "user", "content": "ок"}], "max_tokens": 5}
+    req = urllib.request.Request(
+        OPENROUTER_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                 "HTTP-Referer": "http://localhost:9999", "X-Title": "HubNero Anchor Generator"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        if data.get("choices"):
+            return True, "активен"
+        if isinstance(data.get("error"), dict):
+            return False, str(data["error"].get("message", "ошибка"))[:120]
+        return False, "пустой ответ"
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")
+        msg = body[:120]
+        try:
+            msg = json.loads(body).get("error", {}).get("message", msg)
+        except Exception:
+            pass
+        return False, f"{e.code}: {msg[:110]}"
+    except urllib.error.URLError as e:
+        return False, f"нет сети: {e.reason}"
+    except Exception as e:  # pragma: no cover
+        return False, str(e)[:110]
 
 
 def _fill_queue(slots: list[tuple[str, str]]) -> None:

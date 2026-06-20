@@ -48,21 +48,29 @@
     <div class="card-title">Ключи OpenRouter (для шуток про SEO)</div>
     <p class="help-text" style="margin-top:0;margin-bottom:16px">
         Два слота с разными моделями — шутки чередуются между ними, чтобы реже ловить таймауты и лимиты.
-        Вставьте ключ в поле и нажмите «Сохранить». Ключ хранится локально и не показывается целиком.
+        Впишите ключ и <b>точный id модели из OpenRouter</b> (например <span class="mono">openai/gpt-4o-mini</span>,
+        <span class="mono">nvidia/nemotron-…</span>), затем «Сохранить». Ключ хранится локально и не показывается целиком.
     </p>
     {% for slot in [1, 2] %}
-    <form method="post" action="/settings/openrouter-key" class="inline" style="margin-bottom:10px">
+    <form method="post" action="/settings/openrouter-key" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line)">
         <input type="hidden" name="slot" value="{{ slot }}">
-        <div style="flex:0 0 auto;min-width:150px">
-            <label>Ключ {{ slot }}
-                {% if key_status[slot] %}<span class="badge green" style="margin-left:4px">сохранён {{ key_masked[slot] }}</span>
-                {% else %}<span class="badge gray" style="margin-left:4px">не задан</span>{% endif %}
-            </label>
-            <div class="help-text" style="margin-top:2px">модель: <span class="mono">{{ key_models[slot] }}</span></div>
+        <div style="margin-bottom:8px">
+            <b>Слот {{ slot }}</b>
+            {% if key_status[slot] %}<span class="badge green" style="margin-left:6px">ключ сохранён {{ key_masked[slot] }}</span>
+            {% else %}<span class="badge gray" style="margin-left:6px">ключ не задан</span>{% endif %}
         </div>
-        <input type="text" name="key" placeholder="sk-or-v1-…" autocomplete="off" style="flex:1;min-width:240px">
-        <button class="narrow" type="submit" name="action" value="save">Сохранить</button>
-        {% if key_status[slot] %}<button class="btn-danger btn-sm narrow" type="submit" name="action" value="clear">Очистить</button>{% endif %}
+        <div class="inline">
+            <div style="flex:1;min-width:240px">
+                <label>API-ключ</label>
+                <input type="text" name="key" placeholder="sk-or-v1-…  (пусто = не менять)" autocomplete="off">
+            </div>
+            <div style="flex:1;min-width:220px">
+                <label>Модель (id из OpenRouter)</label>
+                <input type="text" name="model" class="mono" value="{{ key_models[slot] }}" placeholder="openai/gpt-4o-mini">
+            </div>
+            <button class="narrow" type="submit" name="action" value="save">Сохранить</button>
+            {% if key_status[slot] %}<button class="btn-danger btn-sm narrow" type="submit" name="action" value="clear">Очистить ключ</button>{% endif %}
+        </div>
     </form>
     {% endfor %}
     <div class="spacer"></div>

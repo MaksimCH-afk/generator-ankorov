@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session
 
 from .models import AppSetting
 
-# Each slot uses a different free OpenRouter model.
-SLOT_MODELS = {
-    1: "meta-llama/llama-3.3-70b-instruct:free",
-    2: "deepseek/deepseek-chat-v3.1:free",
+# Default model per slot (overridable per slot from the Logs page).
+DEFAULT_MODELS = {
+    1: "openai/gpt-4o-mini",
+    2: "nvidia/nemotron-3-8b-chat",
 }
 
 
@@ -33,6 +33,11 @@ def set_setting(db: Session, key: str, value: str) -> None:
     db.commit()
 
 
+def get_model(db: Session, slot: int) -> str:
+    """Model id for a slot (user override, else the default)."""
+    return get_setting(db, f"or_model_{slot}", "").strip() or DEFAULT_MODELS.get(slot, "")
+
+
 def get_slots(db: Session) -> list[tuple[str, str]]:
     """Configured ``(key, model)`` slots, in round-robin order.
 
@@ -42,11 +47,11 @@ def get_slots(db: Session) -> list[tuple[str, str]]:
     for i in (1, 2):
         key = get_setting(db, f"or_key_{i}", "").strip()
         if key:
-            slots.append((key, SLOT_MODELS[i]))
+            slots.append((key, get_model(db, i)))
     if not slots:
         env_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
         if env_key:
-            slots.append((env_key, os.environ.get("OPENROUTER_MODEL", SLOT_MODELS[1])))
+            slots.append((env_key, os.environ.get("OPENROUTER_MODEL", DEFAULT_MODELS[1])))
     return slots
 
 

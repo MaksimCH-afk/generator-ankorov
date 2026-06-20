@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from .. import appsettings
 from ..database import get_db
-from ..jokes import get_joke, ping
+from ..jokes import get_joke, probe
 from ..logging_util import log_event
 from ..models import Log
 from ..templating import templates
@@ -40,7 +40,7 @@ def logs_page(request: Request, db: Session = Depends(get_db), level: str = "", 
             "sel_category": category,
             "key_status": appsettings.slot_status(db),
             "key_masked": {1: masked(1), 2: masked(2)},
-            "key_models": appsettings.SLOT_MODELS,
+            "key_models": {1: appsettings.get_model(db, 1), 2: appsettings.get_model(db, 2)},
             "active": "logs",
             "msg": msg,
         },
@@ -62,28 +62,35 @@ def api_joke(db: Session = Depends(get_db)):
 
 @router.post("/settings/openrouter-key")
 def save_openrouter_key(db: Session = Depends(get_db), slot: int = Form(...),
-                        key: str = Form(""), action: str = Form("save")):
+                        key: str = Form(""), model: str = Form(""), action: str = Form("save")):
     if slot not in (1, 2):
         raise HTTPException(400, "Неверный слот")
+    # Model is always saved (empty -> falls back to default).
+    appsettings.set_setting(db, f"or_model_{slot}", (model or "").strip())
     if action == "clear":
         appsettings.set_setting(db, f"or_key_{slot}", "")
         log_event(db, "INFO", "settings", f"OpenRouter ключ {slot} очищен")
         return RedirectResponse(f"/logs?msg=Ключ {slot} очищен", status_code=303)
     value = (key or "").strip()
     if not value:
-        return RedirectResponse(f"/logs?msg=Введите ключ для слота {slot}", status_code=303)
+        # Allow saving just the model without changing the key.
+        log_event(db, "INFO", "settings", f"OpenRouter модель {slot} сохранена", appsettings.get_model(db, slot))
+        return RedirectResponse(f"/logs?msg=Модель слота {slot} сохранена", status_code=303)
     appsettings.set_setting(db, f"or_key_{slot}", value)
-    log_event(db, "INFO", "settings", f"OpenRouter ключ {slot} сохранён", value[:8] + "…")
+    log_event(db, "INFO", "settings", f"OpenRouter ключ {slot} сохранён",
+              f"{value[:8]}…, модель: {appsettings.get_model(db, slot)}")
     return RedirectResponse(f"/logs?msg=Ключ {slot} сохранён. Нажмите «Проверить ключи».", status_code=303)
 
 
 @router.post("/settings/openrouter-check")
 def check_openrouter_keys(db: Session = Depends(get_db)):
-    label = {"active": "активен", "inactive": "не отвечает", "empty": "пусто"}
     parts = []
-    for slot, model in appsettings.SLOT_MODELS.items():
+    for slot in (1, 2):
         key = appsettings.get_setting(db, f"or_key_{slot}", "").strip()
-        state = "empty" if not key else ("active" if ping(key, model) else "inactive")
-        parts.append(f"слот {slot}: {label[state]}")
-    log_event(db, "INFO", "settings", "Проверка ключей OpenRouter", ", ".join(parts))
-    return RedirectResponse(f"/logs?msg=Проверка — {', '.join(parts)}", status_code=303)
+        if not key:
+            parts.append(f"слот {slot}: пусто")
+            continue
+        ok, detail = probe(key, appsettings.get_model(db, slot))
+        parts.append(f"слот {slot}: {'✓ активен' if ok else '✗ ' + detail}")
+    log_event(db, "INFO", "settings", "Проверка ключей OpenRouter", "; ".join(parts))
+    return RedirectResponse(f"/logs?msg=Проверка — {'; '.join(parts)}", status_code=303)
