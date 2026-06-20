@@ -13,9 +13,10 @@ from sqlalchemy.orm import Session
 from .models import AppSetting
 
 # Default model per slot (overridable per slot from the Logs page).
+# Free OpenRouter models — work with any valid OpenRouter key.
 DEFAULT_MODELS = {
-    1: "openai/gpt-4o-mini",
-    2: "nvidia/nemotron-3-8b-chat",
+    1: "nvidia/nemotron-3-ultra-550b-a55b:free",
+    2: "qwen/qwen3-next-80b-a3b-instruct:free",
 }
 
 

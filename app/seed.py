@@ -85,6 +85,15 @@ def _migrate_schema() -> None:
         strat_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(strategies)"))}
         if strat_cols and "anchorless_profile_id" not in strat_cols:
             conn.execute(text("ALTER TABLE strategies ADD COLUMN anchorless_profile_id INTEGER"))
+        # Drop stale joke-model overrides so existing DBs pick up the new defaults.
+        app_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(app_settings)"))}
+        if app_cols:
+            conn.execute(text(
+                "DELETE FROM app_settings WHERE key IN ('or_model_1','or_model_2') "
+                "AND value IN ('meta-llama/llama-3.3-70b-instruct:free',"
+                "'deepseek/deepseek-chat-v3.1:free','openai/gpt-4o-mini',"
+                "'nvidia/nemotron-3-8b-chat','')"
+            ))
 
 
 def seed() -> None:
