@@ -1,6 +1,8 @@
 """Logs + system settings (OpenRouter keys) + joke API."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
@@ -84,13 +86,19 @@ def save_openrouter_key(db: Session = Depends(get_db), slot: int = Form(...),
 
 @router.post("/settings/openrouter-check")
 def check_openrouter_keys(db: Session = Depends(get_db)):
-    parts = []
-    for slot in (1, 2):
-        key = appsettings.get_setting(db, f"or_key_{slot}", "").strip()
+    # Read keys/models in the request thread, then probe both slots in parallel
+    # (no DB access inside the worker threads) so the check never drags on.
+    creds = {slot: (appsettings.get_setting(db, f"or_key_{slot}", "").strip(),
+                    appsettings.get_model(db, slot)) for slot in (1, 2)}
+
+    def check(slot: int) -> str:
+        key, model = creds[slot]
         if not key:
-            parts.append(f"слот {slot}: пусто")
-            continue
-        ok, detail = probe(key, appsettings.get_model(db, slot))
-        parts.append(f"слот {slot}: {'✓ активен' if ok else '✗ ' + detail}")
+            return f"слот {slot}: пусто"
+        ok, detail = probe(key, model)
+        return f"слот {slot}: {'✓ активен' if ok else '✗ ' + detail}"
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        parts = list(ex.map(check, (1, 2)))
     log_event(db, "INFO", "settings", "Проверка ключей OpenRouter", "; ".join(parts))
     return RedirectResponse(f"/logs?msg=Проверка — {'; '.join(parts)}", status_code=303)

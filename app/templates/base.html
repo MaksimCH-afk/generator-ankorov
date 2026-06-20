@@ -94,9 +94,12 @@ function loadJoke(force) {
         if (cached) { box.textContent = cached; return; }
     }
     box.textContent = 'Думаем над шуткой…';
-    fetch('/api/joke').then(r => r.json())
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000);
+    fetch('/api/joke', { signal: ctrl.signal }).then(r => r.json())
         .then(d => { const j = d.joke || '…'; box.textContent = j; sessionStorage.setItem('seo_joke', j); })
-        .catch(() => { box.textContent = 'SEO-шутка на переиндексации 🙂'; });
+        .catch(() => { box.textContent = 'SEO-шутка на переиндексации 🙂'; })
+        .finally(() => clearTimeout(t));
 }
 document.addEventListener('DOMContentLoaded', function(){ loadJoke(false); });
 var jr = document.getElementById('joke-refresh');

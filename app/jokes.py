@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import random
+import threading
 import urllib.error
 import urllib.request
 from collections import deque
@@ -88,6 +89,8 @@ _queue: deque[str] = deque()
 _recent: deque[str] = deque(maxlen=30)
 _deck: list[str] = []
 _rr = {"i": 0}
+_lock = threading.Lock()
+_refilling = {"on": False}
 
 
 def openrouter_chat(key: str, model: str, prompt: str, max_tokens: int = 400, timeout: int = 12) -> str | None:
@@ -146,7 +149,7 @@ def ping(key: str, model: str) -> bool:
     return bool(openrouter_chat(key, model, "Скажи одно слово: ок.", max_tokens=8, timeout=10))
 
 
-def probe(key: str, model: str) -> tuple[bool, str]:
+def probe(key: str, model: str, timeout: int = 8) -> tuple[bool, str]:
     """Diagnostic check — returns ``(ok, detail)`` with the real reason on failure."""
     payload = {"model": model, "messages": [{"role": "user", "content": "ок"}], "max_tokens": 5}
     req = urllib.request.Request(
@@ -157,7 +160,7 @@ def probe(key: str, model: str) -> tuple[bool, str]:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=12) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         if data.get("choices"):
             return True, "активен"
@@ -178,17 +181,33 @@ def probe(key: str, model: str) -> tuple[bool, str]:
         return False, str(e)[:110]
 
 
-def _fill_queue(slots: list[tuple[str, str]]) -> None:
-    if _queue or not slots:
+def _refill_worker(slots: list[tuple[str, str]]) -> None:
+    """Fetch a batch of LLM jokes off the request path (background thread)."""
+    try:
+        fresh: list[str] = []
+        for _ in range(len(slots)):
+            key, model = slots[_rr["i"] % len(slots)]
+            _rr["i"] += 1
+            fresh = batch_jokes(key, model)
+            if fresh:
+                break
+        with _lock:
+            for j in fresh:
+                if j not in _recent and j not in _queue:
+                    _queue.append(j)
+    finally:
+        _refilling["on"] = False
+
+
+def _maybe_refill(slots: list[tuple[str, str]]) -> None:
+    """Kick off a background refill when the queue runs low. Never blocks."""
+    if not slots or len(_queue) > 3:
         return
-    for _ in range(len(slots)):
-        key, model = slots[_rr["i"] % len(slots)]
-        _rr["i"] += 1
-        for j in batch_jokes(key, model):
-            if j not in _recent and j not in _queue:
-                _queue.append(j)
-        if _queue:
+    with _lock:
+        if _refilling["on"]:
             return
+        _refilling["on"] = True
+    threading.Thread(target=_refill_worker, args=(slots,), daemon=True).start()
 
 
 def _from_deck() -> str:
@@ -208,15 +227,21 @@ def _from_deck() -> str:
 
 
 def get_joke(slots: list[tuple[str, str]] | None = None) -> str:
+    """Return a joke *immediately* — never blocks on the network.
+
+    LLM jokes are produced by a background thread (``_maybe_refill``); until the
+    queue has them we serve from the local shuffled deck. This keeps the topbar
+    snappy even when OpenRouter is slow or unreachable.
+    """
     slots = slots or []
+    _maybe_refill(slots)
     joke = None
-    if not _queue:
-        _fill_queue(slots)
-    while _queue:
-        cand = _queue.popleft()
-        if cand not in _recent:
-            joke = cand
-            break
+    with _lock:
+        while _queue:
+            cand = _queue.popleft()
+            if cand not in _recent:
+                joke = cand
+                break
     if not joke:
         joke = _from_deck()
     _recent.append(joke)
