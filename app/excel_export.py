@@ -35,8 +35,9 @@ INTERNAL_SHEET = "Внутренние страницы"
 
 
 def _line(row: GeneratedRow, sprint: str, seo: str, url_type: str,
-          include_language: bool, language: str) -> list:
-    """Build one output line. Link Type / Anchor Type / Keyword stay empty."""
+          include_language: bool, language: str, keyword: str) -> list:
+    """Build one output line. Link Type / Anchor Type stay empty; Keyword holds
+    the project's most-used keyword (same value on every row)."""
     line = [
         sprint,
         seo,
@@ -46,19 +47,36 @@ def _line(row: GeneratedRow, sprint: str, seo: str, url_type: str,
         "",                   # Link Type — empty
         "",                   # Anchor Type — empty
         row.anchor,           # Anchor — as computed
-        "",                   # Keyword — empty
+        keyword,              # Keyword — project's top keyword, on every row
     ]
     if include_language:
         line.append(language)
     return line
 
 
+def top_keyword(sheets: dict[str, list[GeneratedRow]]) -> str:
+    """The most-used keyword anchor across a project (highest link count).
+
+    Bare-URL/domain (anchorless) and internal-page rows don't count — only real
+    frequency keywords. Empty for a fully anchorless campaign.
+    """
+    best_count = 0
+    best = ""
+    for rows in sheets.values():
+        for row in rows:
+            if getattr(row, "is_keyword", False) and row.link_qty > best_count:
+                best_count = row.link_qty
+                best = row.keyword
+    return best
+
+
 def _write_sheet(wb, ws, rows: list[GeneratedRow], columns: list[str], sprint: str, seo: str,
-                 url_type: str, include_language: bool, language: str, grouped: bool) -> None:
+                 url_type: str, include_language: bool, language: str, grouped: bool,
+                 keyword: str) -> None:
     # Column widths first (write-only mode wants dimensions before rows).
     widths = [len(c) for c in columns]
     for row in rows:
-        line = _line(row, sprint, seo, url_type, include_language, language)
+        line = _line(row, sprint, seo, url_type, include_language, language, keyword)
         values = ([str(row.link_qty)] + line) if grouped else line
         for i, value in enumerate(values):
             widths[i] = max(widths[i], len(str(value)))
@@ -77,7 +95,7 @@ def _write_sheet(wb, ws, rows: list[GeneratedRow], columns: list[str], sprint: s
 
     # Body — streamed row by row to keep memory flat for large volumes.
     for row in rows:
-        line = _line(row, sprint, seo, url_type, include_language, language)
+        line = _line(row, sprint, seo, url_type, include_language, language, keyword)
         if grouped:
             if row.link_qty > 0:
                 ws.append([row.link_qty] + line)
@@ -100,11 +118,13 @@ def build_workbook(sheets: dict[str, list[GeneratedRow]], *, sprint: str = "",
         include_language = bool((language or "").strip())
     columns = (["Link Q-ty"] if grouped else []) + BASE_COLUMNS + ([LANG_COLUMN] if include_language else [])
 
+    keyword = top_keyword(sheets)
     wb = Workbook(write_only=True)
     for name, rows in sheets.items():
         ws = wb.create_sheet(title=_safe_sheet_name(name))
         url_type = "Inner Page" if name == INTERNAL_SHEET else "Main Page"
-        _write_sheet(wb, ws, rows, columns, sprint, seo_specialist, url_type, include_language, language, grouped)
+        _write_sheet(wb, ws, rows, columns, sprint, seo_specialist, url_type,
+                     include_language, language, grouped, keyword)
     if not wb.sheetnames:  # never leave an empty workbook
         wb.create_sheet(title="Empty")
     buffer = io.BytesIO()

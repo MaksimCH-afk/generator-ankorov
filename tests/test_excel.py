@@ -11,13 +11,13 @@ def _rows():
     return {
         "Прогоны": [
             GeneratedRow(link_qty=3, url="https://betalice.com/", anchor="https://betalice.com/",
-                         article_language="German", keyword=""),
+                         article_language="German", keyword="https://betalice.com/"),
             GeneratedRow(link_qty=2, url="https://betalice.com/", anchor="betalice",
-                         article_language="German", keyword=""),
+                         article_language="German", keyword="betalice", is_keyword=True),
         ],
         "Внутренние страницы": [
             GeneratedRow(link_qty=1, url="https://betalice.com/boni/", anchor="betalice auszahlung",
-                         article_language="German", keyword=""),
+                         article_language="German", keyword="betalice auszahlung"),
         ],
     }
 
@@ -64,3 +64,26 @@ def test_internal_sheet_url_type_inner_page():
     row = [c.value for c in ws[2]]
     assert row[4] == "Inner Page"
     assert row[3] == "https://betalice.com/boni/"
+
+
+def test_keyword_column_holds_top_keyword_on_every_row():
+    kw_idx = BASE_COLUMNS.index("Keyword")
+    wb = _load(build_workbook(_rows(), language="German"))
+    # Every row in every sheet carries the project's most-used keyword.
+    for sheet in ("Прогоны", "Внутренние страницы"):
+        ws = wb[sheet]
+        for r in range(2, ws.max_row + 1):
+            assert [c.value for c in ws[r]][kw_idx] == "betalice"
+
+
+def test_keyword_blank_for_fully_anchorless():
+    kw_idx = BASE_COLUMNS.index("Keyword")
+    sheets = {
+        "Крауд+сабмиты": [
+            GeneratedRow(link_qty=2, url="https://x.com/", anchor="https://x.com/",
+                         article_language="", keyword="https://x.com/"),
+        ],
+    }
+    wb = _load(build_workbook(sheets, language=""))
+    ws = wb["Крауд+сабмиты"]
+    assert [c.value for c in ws[2]][kw_idx] in (None, "")

@@ -51,6 +51,7 @@ class GeneratedRow:
     anchor: str
     article_language: str
     keyword: str
+    is_keyword: bool = False  # True for frequency-keyword anchors (not anchorless/internal)
 
 
 @dataclass
@@ -195,6 +196,7 @@ def generate_profile_rows(
                 anchor=kw.keyword,
                 article_language=project.article_language,
                 keyword=kw.keyword,
+                is_keyword=True,
             )
         )
 
