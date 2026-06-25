@@ -98,6 +98,31 @@
     <p class="help-text" style="margin-top:0">Анкоры типовых страниц настраиваются в разделе <a href="/suffixes?project={{ project.id }}">«Внутренние страницы»</a>.</p>
 </div>
 
+<div class="card">
+    <div class="card-title">Дублировать проект</div>
+    <p class="help-text" style="margin-top:0">
+        Создать новый проект на этой же семантике ({{ keywords|length }} ключей) — без повторной загрузки.
+        Укажите новый домен (или несколько, по одному в строке — под зеркала) и стратегию.
+        Копируются ключи, объём, язык, бренд, безанкор и внутренние страницы.
+    </p>
+    <form method="post" action="/projects/{{ project.id }}/duplicate">
+        <div class="grid grid-2">
+            <div class="field">
+                <label>Новый домен(ы)</label>
+                <textarea name="domains" rows="3" placeholder="https://newcasino.at/&#10;mirror-casino.com"></textarea>
+            </div>
+            <div class="field">
+                <label>Стратегия</label>
+                <select name="strategy">
+                    <option value="keep">— как в исходном{% if project.strategy %} ({{ project.strategy.name }}){% endif %} —</option>
+                    {% for o in strategy_options %}<option value="{{ o.id }}">{{ o.label }}</option>{% endfor %}
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn-sec">Создать дубль</button>
+    </form>
+</div>
+
 <div class="row-actions" style="justify-content:flex-end">
     <form method="post" action="/projects/{{ project.id }}/delete" onsubmit="return confirm('Удалить проект?')">
         <button class="btn-danger" type="submit">Удалить проект</button>

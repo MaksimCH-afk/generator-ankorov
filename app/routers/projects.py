@@ -73,6 +73,67 @@ def create_project(db: Session = Depends(get_db), url: str = Form(...),
     return RedirectResponse(f"/projects/{project.id}?msg=Проект создан", status_code=303)
 
 
+@router.post("/projects/{pid}/duplicate")
+async def duplicate_project(pid: int, request: Request, db: Session = Depends(get_db)):
+    """Create new project(s) reusing this project's semantics (keywords + frequencies).
+
+    ``domains`` (textarea, one per line or comma-separated) — the new domains.
+    ``strategy`` — "keep" copies the source strategy, otherwise a strategy id.
+    All other settings (volume, language, brand, anchorless profile, internal
+    pages, redistribution) are copied so the new project is ready to generate.
+    """
+    source = db.get(Project, pid)
+    if not source:
+        raise HTTPException(404, "Проект не найден")
+    form = await request.form()
+    raw = (form.get("domains") or "").replace(",", "\n")
+    domains = [d.strip() for d in raw.splitlines() if d.strip()]
+    if not domains:
+        return RedirectResponse(f"/projects/{pid}?msg=Укажите хотя бы один домен для дубля.", status_code=303)
+
+    strat_choice = (form.get("strategy") or "keep").strip()
+    if strat_choice == "keep":
+        strategy_id = source.strategy_id
+    else:
+        strategy_id = int(strat_choice) if strat_choice.isdigit() else None
+
+    created, existed = [], []
+    for d in domains:
+        canonical = normalize_domain(d)
+        if db.query(Project).filter(Project.url == canonical).first():
+            existed.append(canonical)
+            continue
+        clone = Project(
+            url=canonical,
+            language=source.language,
+            brand=source.brand,
+            strategy_id=strategy_id,
+            volume=source.volume,
+            crowd_volume=source.crowd_volume,
+            anchorless_profile_id=source.anchorless_profile_id,
+            internal_language=source.internal_language,
+            internal_pages_json=source.internal_pages_json,
+            redistribution_json=source.redistribution_json,
+        )
+        db.add(clone)
+        db.flush()
+        for k in source.keywords:
+            db.add(Keyword(project_id=clone.id, keyword=k.keyword, frequency=k.frequency, position=k.position))
+        created.append(clone)
+        log_event(db, "INFO", "project", f"Создан дубль {clone.url}",
+                  f"Из {source.url}, ключей: {len(source.keywords)}, стратегия: "
+                  f"{clone.strategy.name if clone.strategy else '—'}")
+    db.commit()
+
+    if len(created) == 1 and not existed:
+        return RedirectResponse(f"/projects/{created[0].id}?msg=Создан дубль с {len(source.keywords)} ключами.",
+                                status_code=303)
+    parts = [f"Создано дублей: {len(created)} (по {len(source.keywords)} ключей)."]
+    if existed:
+        parts.append(f"Пропущены (уже есть): {', '.join(existed)}")
+    return RedirectResponse(f"/?msg={' '.join(parts)}", status_code=303)
+
+
 @router.post("/projects/{pid}/basics")
 async def update_basics(pid: int, request: Request, db: Session = Depends(get_db)):
     project = db.get(Project, pid)

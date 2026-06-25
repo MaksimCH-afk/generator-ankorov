@@ -78,6 +78,36 @@ def test_export_and_breakdown():
         assert e.status_code == 200 and "spreadsheet" in e.headers["content-type"]
 
 
+def test_duplicate_project_reuses_keywords():
+    with TestClient(app) as c:
+        c.post("/projects/create", data={"url": "https://dup-src.com/", "language": "German",
+                                         "brand": "DupBrand"}, follow_redirects=False)
+        pid = _project_id("https://dup-src.com/")
+        c.post(f"/projects/{pid}/keywords",
+               files={"file": ("f.csv", b"keyword,frequency\na,100\nb,50\nc,10\n", "text/csv")},
+               follow_redirects=False)
+        sid = SessionLocal().query(Strategy).first().id
+        c.post(f"/projects/{pid}/strategy", data={"strategy_id": sid}, follow_redirects=False)
+        c.post(f"/projects/{pid}/volume", data={"volume": 250}, follow_redirects=False)
+        # duplicate to two mirror domains, keep the source strategy
+        r = c.post(f"/projects/{pid}/duplicate",
+                   data={"domains": "https://dup-m1.com/\ndup-m2.at", "strategy": "keep"},
+                   follow_redirects=False)
+        assert r.status_code == 303
+        db = SessionLocal()
+        for url in ("https://dup-m1.com/", "https://dup-m2.at/"):
+            clone = db.query(Project).filter(Project.url == url).first()
+            assert clone is not None
+            assert len(clone.keywords) == 3          # keywords copied
+            assert clone.language == "German" and clone.brand == "DupBrand"
+            assert clone.volume == 250 and clone.strategy_id == sid
+        db.close()
+        # duplicating onto an existing domain is skipped
+        r2 = c.post(f"/projects/{pid}/duplicate",
+                    data={"domains": "https://dup-m1.com/", "strategy": "keep"}, follow_redirects=False)
+        assert "location" in r2.headers
+
+
 def test_bulk_and_anchors():
     with TestClient(app) as c:
         c.post("/projects/create", data={"url": "https://b1.com/"}, follow_redirects=False)
