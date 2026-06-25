@@ -270,25 +270,28 @@ async def batch_keywords(request: Request, db: Session = Depends(get_db)):
 
         for unit in units:
             label = f"{fname} → «{unit['name']}»" if is_excel else fname
-            pairs, domain = unit["pairs"], unit["domain"]
+            pairs, domains = unit["pairs"], unit["domains"]
             if not pairs:
                 skipped.append(unit["name"])
                 continue
-            if domain:
-                existing = by_url(domain)
-                if existing:
-                    assign(existing, pairs)
-                    updated.append(f"{normalize_domain(domain)} ({len(pairs)} ключей)")
-                    log_event(db, "INFO", "import", f"Обновлён проект {normalize_domain(domain)}",
-                              f"{label}, ключей: {len(pairs)}")
-                else:
-                    project = Project(url=normalize_domain(domain), language="English", brand="")
-                    db.add(project)
-                    db.flush()
-                    assign(project, pairs)
-                    created.append(f"{project.url} ({len(pairs)} ключей)")
-                    log_event(db, "INFO", "import", f"Создан проект {project.url}",
-                              f"{label}, ключей: {len(pairs)}")
+            if domains:
+                # A sheet may carry several domains sharing one keyword set —
+                # each becomes its own project.
+                for domain in domains:
+                    existing = by_url(domain)
+                    if existing:
+                        assign(existing, pairs)
+                        updated.append(f"{normalize_domain(domain)} ({len(pairs)} ключей)")
+                        log_event(db, "INFO", "import", f"Обновлён проект {normalize_domain(domain)}",
+                                  f"{label}, ключей: {len(pairs)}")
+                    else:
+                        project = Project(url=normalize_domain(domain), language="English", brand="")
+                        db.add(project)
+                        db.flush()
+                        assign(project, pairs)
+                        created.append(f"{project.url} ({len(pairs)} ключей)")
+                        log_event(db, "INFO", "import", f"Создан проект {project.url}",
+                                  f"{label}, ключей: {len(pairs)}")
                 continue
             target = match_project(unit["name"] if is_excel else stem, db.query(Project).all())
             if target is None:

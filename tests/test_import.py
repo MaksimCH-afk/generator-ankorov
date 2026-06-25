@@ -1,5 +1,5 @@
 """Tests for the smart project-import parser and anchorless profiles."""
-from app.parsing import normalize_domain, parse_project_sheet
+from app.parsing import normalize_domain, parse_project_sheet, parse_project_sheet_multi
 from app.service import profile_to_formats
 from app import generator as gen
 
@@ -8,6 +8,40 @@ def test_normalize_domain_http_to_https():
     assert normalize_domain("http://pandidocasinos.at/") == "https://pandidocasinos.at/"
     assert normalize_domain("bet-alice-at.at") == "https://bet-alice-at.at/"
     assert normalize_domain("https://vikingluck-casino.at/") == "https://vikingluck-casino.at/"
+
+
+def test_normalize_domain_malformed_schemes():
+    canonical = "https://silverplaycasino-austria.com/"
+    for raw in [
+        "silverplaycasino-austria.com/",
+        "https:/silverplaycasino-austria.com/",
+        "http:/silverplaycasino-austria.com/",
+        "http:/silverplaycasino-austria.com",
+        "silverplaycasino-austria.com",
+        "http://silverplaycasino-austria.com/",
+        "http/silverplaycasino-austria.com/",
+        "https://www.silverplaycasino-austria.com",
+    ]:
+        assert normalize_domain(raw) == canonical, raw
+
+
+def test_multiple_domains_one_keyword_set():
+    rows = [
+        ["Keyword", "Volume", "Перевод", "Difficulty", ""],
+        ["silverplay casino", "150", "", "36", "silverplaycasinos.at"],
+        ["silverplay", "150", "", "41", "silverplay-casino.co.at"],
+        ["silver play casino", "60", "", "3", "silverplaycasino-austria.com"],
+    ]
+    domains, pairs = parse_project_sheet_multi(rows)
+    assert domains == [
+        "https://silverplaycasinos.at/",
+        "https://silverplay-casino.co.at/",
+        "https://silverplaycasino-austria.com/",
+    ]
+    assert [p[0] for p in pairs] == ["silverplay casino", "silverplay", "silver play casino"]
+    # The single-domain helper still returns the first.
+    first, _ = parse_project_sheet(rows)
+    assert first == "https://silverplaycasinos.at/"
 
 
 def test_domain_in_header_cell():

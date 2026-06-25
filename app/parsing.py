@@ -13,6 +13,10 @@ VOLUME_SYNS = ("volume", "vol", "частотн", "частот", "freq", "words
 # KD / Keyword Difficulty and similar are intentionally ignored.
 
 _DOMAIN_RE = re.compile(r"^(https?://)?([a-z0-9-]+\.)+[a-z]{2,}(/.*)?$", re.I)
+# A (possibly malformed) leading scheme: http://, https://, http:/, http/, https:/ …
+_SCHEME_RE = re.compile(r"^\s*https?[:/]+", re.I)
+# A bare host (+ optional path), no scheme.
+_BARE_DOMAIN_RE = re.compile(r"^([a-z0-9-]+\.)+[a-z]{2,}(/.*)?$", re.I)
 
 
 def _rows_from_xlsx(content: bytes) -> list[list[str]]:
@@ -101,21 +105,25 @@ def _looks_like_domain(value: str) -> bool:
     v = value.strip()
     if not v or " " in v:
         return False
-    return bool(_DOMAIN_RE.match(v))
+    # Tolerate a malformed scheme (http:/, http/, …) before checking the host.
+    v = _SCHEME_RE.sub("", v)
+    return bool(_BARE_DOMAIN_RE.match(v))
 
 
 def normalize_domain(value: str) -> str:
     """Normalise a domain/URL to ``https://host/...``.
 
-    Forces https, drops a leading ``www.``, and ensures a trailing slash on the
-    root form — so ``http://www.site.com`` and ``site.com/`` collapse to the same
-    canonical URL (avoids duplicate projects).
+    Forces https, drops a leading ``www.``, ensures a trailing slash on the root
+    form, and repairs malformed schemes — so all of these collapse to the same
+    canonical URL::
+
+        site.com/  •  https:/site.com/  •  http:/site.com  •  http/site.com/
+        •  http://site.com/  •  https://www.site.com  ->  https://site.com/
     """
     v = value.strip()
-    if not re.match(r"^https?://", v, re.I):
-        v = "https://" + v
-    v = re.sub(r"^http://", "https://", v, flags=re.I)
-    v = re.sub(r"^https://www\.", "https://", v, flags=re.I)
+    v = _SCHEME_RE.sub("", v)              # strip any (malformed) scheme
+    v = re.sub(r"^www\.", "", v, flags=re.I)
+    v = "https://" + v
     # Ensure the root form ends with a single slash.
     if "/" not in v.split("://", 1)[1]:
         v += "/"
@@ -134,13 +142,28 @@ def _find_header(rows: list[list[str]]) -> tuple[int | None, int | None, int | N
     return None, None, None
 
 
-def _find_domain(rows: list[list[str]]) -> str | None:
-    """Scan all cells for the first value that looks like a domain/URL."""
+def _find_domains(rows: list[list[str]]) -> list[str]:
+    """All distinct domains/URLs found in the sheet, normalised, in order.
+
+    A sheet may list several domains that share one keyword set (e.g. mirror
+    domains) — each becomes its own project.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
     for cells in rows:
         for c in cells:
             if _looks_like_domain(c):
-                return normalize_domain(c)
-    return None
+                norm = normalize_domain(c)
+                if norm not in seen:
+                    seen.add(norm)
+                    out.append(norm)
+    return out
+
+
+def _find_domain(rows: list[list[str]]) -> str | None:
+    """The first domain/URL in the sheet (or ``None``)."""
+    domains = _find_domains(rows)
+    return domains[0] if domains else None
 
 
 def _to_float(raw: str) -> float:
@@ -150,20 +173,19 @@ def _to_float(raw: str) -> float:
         return 0.0
 
 
-def parse_project_sheet(rows: list[list[str]]) -> tuple[str | None, list[tuple[str, float]]]:
-    """Parse one sheet into ``(domain, [(keyword, frequency), ...])``.
+def parse_project_sheet_multi(rows: list[list[str]]) -> tuple[list[str], list[tuple[str, float]]]:
+    """Parse one sheet into ``(domains, [(keyword, frequency), ...])``.
 
-    Handles synonymous column names, columns in any position and a domain that
-    can live in a header cell, a dedicated column or repeated in every row.
-    Returns ``(None, [])`` for empty / summary / dashboard sheets.
+    Like :func:`parse_project_sheet` but returns *every* domain in the sheet —
+    a sheet may list several domains that share one keyword set.
     """
     rows = [r for r in rows if any(r)]
     if not rows:
-        return None, []
+        return [], []
     header_idx, kw_col, vol_col = _find_header(rows)
-    domain = _find_domain(rows)
+    domains = _find_domains(rows)
     if header_idx is None or kw_col is None:
-        return domain, []  # no keyword column -> not a project sheet
+        return domains, []  # no keyword column -> not a project sheet
 
     pairs: list[tuple[str, float]] = []
     for cells in rows[header_idx + 1:]:
@@ -174,25 +196,37 @@ def parse_project_sheet(rows: list[list[str]]) -> tuple[str | None, list[tuple[s
             continue
         freq = _to_float(cells[vol_col]) if (vol_col is not None and vol_col < len(cells)) else 0.0
         pairs.append((keyword, freq))
-    return domain, pairs
+    return domains, pairs
+
+
+def parse_project_sheet(rows: list[list[str]]) -> tuple[str | None, list[tuple[str, float]]]:
+    """Parse one sheet into ``(domain, pairs)`` — the first domain only.
+
+    Handles synonymous column names, columns in any position and a domain that
+    can live in a header cell, a dedicated column or repeated in every row.
+    Returns ``(None, [])`` for empty / summary / dashboard sheets.
+    """
+    domains, pairs = parse_project_sheet_multi(rows)
+    return (domains[0] if domains else None), pairs
 
 
 def parse_project_sheets(content: bytes) -> list[dict]:
-    """Import projects from a workbook: one sheet = one project.
+    """Import projects from a workbook: one sheet = one or more projects.
 
-    Returns a list of ``{"name": sheet_name, "domain": str|None, "pairs": [...]}``.
+    Returns a list of ``{"name": sheet_name, "domains": [str], "pairs": [...]}``.
+    Each domain in a sheet becomes its own project (sharing the keyword set).
     Empty and summary sheets yield empty ``pairs`` and are skipped by the caller.
     """
     wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
     out = []
     for sheet_name in wb.sheetnames:
-        domain, pairs = parse_project_sheet(_normalize_rows(wb[sheet_name]))
-        out.append({"name": sheet_name, "domain": domain, "pairs": pairs})
+        domains, pairs = parse_project_sheet_multi(_normalize_rows(wb[sheet_name]))
+        out.append({"name": sheet_name, "domains": domains, "pairs": pairs})
     return out
 
 
 def parse_project_table(filename: str, content: bytes) -> dict:
-    """Same as :func:`parse_project_sheet` but for a single CSV/Excel table."""
+    """Same as :func:`parse_project_sheets` but for a single CSV/Excel table."""
     rows = read_table(filename, content)
-    domain, pairs = parse_project_sheet(rows)
-    return {"name": filename, "domain": domain, "pairs": pairs}
+    domains, pairs = parse_project_sheet_multi(rows)
+    return {"name": filename, "domains": domains, "pairs": pairs}
