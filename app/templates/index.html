@@ -24,6 +24,13 @@
     </p>
     <form method="post" action="/projects/batch-keywords" enctype="multipart/form-data" class="inline">
         <input type="file" name="files" multiple accept=".csv,.xlsx,.xlsm">
+        <div class="field" style="margin:0">
+            <label>Язык статьи для новых проектов</label>
+            <select name="language">
+                {% for lang in article_languages %}<option value="{{ lang }}" {{ 'selected' if lang=='English' }}>{{ lang }}</option>{% endfor %}
+                <option value="">— Не указывать в выгрузке —</option>
+            </select>
+        </div>
         <button class="narrow" type="submit">Импортировать</button>
     </form>
 </div>

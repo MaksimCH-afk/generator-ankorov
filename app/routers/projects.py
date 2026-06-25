@@ -247,6 +247,8 @@ async def batch_keywords(request: Request, db: Session = Depends(get_db)):
     files = [f for f in form.getlist("files") if getattr(f, "filename", "")]
     if not files:
         return RedirectResponse("/?error=Файлы не выбраны.", status_code=303)
+    # Language chosen on the import form, applied to every newly-created project.
+    import_language = (form.get("language") or "").strip()
 
     created, updated, skipped, unmatched = [], [], [], []
 
@@ -285,7 +287,7 @@ async def batch_keywords(request: Request, db: Session = Depends(get_db)):
                         log_event(db, "INFO", "import", f"Обновлён проект {normalize_domain(domain)}",
                                   f"{label}, ключей: {len(pairs)}")
                     else:
-                        project = Project(url=normalize_domain(domain), language="English", brand="")
+                        project = Project(url=normalize_domain(domain), language=import_language, brand="")
                         db.add(project)
                         db.flush()
                         assign(project, pairs)
