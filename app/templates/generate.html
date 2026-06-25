@@ -35,11 +35,18 @@
         </div>
         <hr>
         <label class="toggle-row">
-            <input type="checkbox" name="smart_filter" id="f-smart" value="on">
+            <input type="checkbox" name="smart_filter" id="f-smart" value="on" checked>
             <span>
                 <b>Умное распознавание анкоров</b>
                 {% if smart_semantic %}<span class="badge green" style="margin-left:6px">смысловой режим</span>
                 {% else %}<span class="badge gray" style="margin-left:6px">по словам — добавьте ключи OpenRouter в «Логах» для смыслового режима</span>{% endif %}
+            </span>
+        </label>
+        <label class="toggle-row" style="margin-top:10px">
+            <input type="checkbox" name="include_language" id="f-inclang" value="on">
+            <span>
+                <b>Выводить столбец «Article Language»</b>
+                <span class="badge gray" style="margin-left:6px">по умолчанию не выводится</span>
             </span>
         </label>
     </div>
@@ -170,16 +177,18 @@ function toggleAll(cb){ document.querySelectorAll('input[name="project_ids"]').f
 
 // persist export params across reloads (inline edits reload the page)
 const PARAMS=['f-sprint','f-seo','f-format','f-group'];
+const CHECKS=[['f-smart','gen_smart'],['f-inclang','gen_inclang']];  // [id, storageKey]
 function saveParams(){
     PARAMS.forEach(id=>{const e=document.getElementById(id); if(e) localStorage.setItem('gen_'+id, e.value);});
-    const sm=document.getElementById('f-smart'); if(sm) localStorage.setItem('gen_smart', sm.checked?'1':'0');
+    CHECKS.forEach(([id,key])=>{const e=document.getElementById(id); if(e) localStorage.setItem(key, e.checked?'1':'0');});
 }
 function restoreParams(){
     PARAMS.forEach(id=>{const e=document.getElementById(id); const v=localStorage.getItem('gen_'+id); if(e&&v!==null) e.value=v;});
-    const sm=document.getElementById('f-smart'); if(sm) sm.checked = localStorage.getItem('gen_smart')==='1';
+    // checkboxes keep their HTML default unless the user previously toggled them
+    CHECKS.forEach(([id,key])=>{const e=document.getElementById(id); const v=localStorage.getItem(key); if(e&&v!==null) e.checked = v==='1';});
 }
 PARAMS.forEach(id=>{const e=document.getElementById(id); if(e) e.addEventListener('change', saveParams);});
-(function(){const sm=document.getElementById('f-smart'); if(sm) sm.addEventListener('change', saveParams);})();
+CHECKS.forEach(([id])=>{const e=document.getElementById(id); if(e) e.addEventListener('change', saveParams);});
 
 function runGenerate(){
     const btn=document.getElementById('gen-btn');

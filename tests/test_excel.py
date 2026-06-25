@@ -103,6 +103,30 @@ def test_anchor_type_column_in_export():
         assert [c.value for c in ws[r]][at_idx] in ("BD", "EM", "PM")
 
 
+def test_language_column_suppressed_by_flag():
+    # Even with a language set, include_language=False drops the column.
+    wb = _load(build_workbook(_rows(), language="German", include_language=False))
+    header = [c.value for c in wb["Прогоны"][1]]
+    assert "Article Language" not in header
+
+
+def test_crowd_keyword_fallback_fills_column():
+    kw_idx = BASE_COLUMNS.index("Keyword")
+    # Crowd campaign: only anchorless rows (no keyword anchors).
+    sheets = {
+        "Крауд+сабмиты": [
+            GeneratedRow(link_qty=3, url="https://x.com/", anchor="x.com",
+                         article_language="", keyword="x.com"),
+            GeneratedRow(link_qty=2, url="https://x.com/", anchor="https://x.com/",
+                         article_language="", keyword="https://x.com/"),
+        ],
+    }
+    wb = _load(build_workbook(sheets, keyword="best keyword"))
+    ws = wb["Крауд+сабмиты"]
+    for r in range(2, ws.max_row + 1):
+        assert [c.value for c in ws[r]][kw_idx] == "best keyword"
+
+
 def test_keyword_blank_for_fully_anchorless():
     kw_idx = BASE_COLUMNS.index("Keyword")
     sheets = {

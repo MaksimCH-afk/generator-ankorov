@@ -14,7 +14,7 @@ from ..helpers import match_project, project_progress, project_view, record_hist
 from ..logging_util import log_event
 from ..models import ARTICLE_LANGUAGES, Keyword, Project, Strategy
 from ..parsing import normalize_domain, parse_frequency, parse_project_sheets, parse_project_table
-from ..service import generate_project_sheets, strategy_label
+from ..service import generate_project_sheets, project_top_keyword, strategy_label
 from ..templating import templates
 
 router = APIRouter()
@@ -393,7 +393,8 @@ def export_project(pid: int, db: Session = Depends(get_db)):
         return RedirectResponse(f"/projects/{pid}?msg=Нет данных: задайте стратегию, объём и частотку.",
                                 status_code=303)
     content = build_workbook(sheets, sprint="", seo_specialist=SEO_SPECIALISTS[0],
-                             language=project.language or "", brand=project.brand or "")
+                             language=project.language or "", brand=project.brand or "",
+                             keyword=project_top_keyword(project), include_language=False)
     record_history(db, project, "separate", sheets)
     log_event(db, "INFO", "generate", f"Выгружен (с вкладки Проекты) {project.url}",
               f"Стратегия: {project.strategy.name if project.strategy else '—'}, объём: {project.volume}")

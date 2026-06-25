@@ -14,7 +14,8 @@ from ..excel_export import build_workbook, build_zip, safe_filename
 from ..helpers import project_progress, record_history
 from ..logging_util import log_event
 from ..models import ARTICLE_LANGUAGES, SEO_SPECIALISTS, IgnoreAnchor, Project, Strategy
-from ..service import generate_project_sheets, project_breakdown, strategy_label, strategy_segments
+from ..service import (generate_project_sheets, project_breakdown, project_top_keyword,
+                       strategy_label, strategy_segments)
 from ..templating import templates
 
 router = APIRouter()
@@ -89,6 +90,7 @@ async def generate(request: Request, db: Session = Depends(get_db)):
     seo_specialist = (form.get("seo_specialist") or "").strip()
     grouped = form.get("group_mode") == "group"
     smart = form.get("smart_filter") == "on"
+    include_language = form.get("include_language") == "on"  # default off (unchecked)
     if not pids:
         return JSONResponse({"error": "Выберите хотя бы один проект."}, status_code=400)
 
@@ -113,7 +115,9 @@ async def generate(request: Request, db: Session = Depends(get_db)):
             continue
         files[safe_filename(project.url)] = build_workbook(
             sheets, sprint=sprint, seo_specialist=seo_specialist,
-            language=project.language or "", brand=project.brand or "", grouped=grouped)
+            language=project.language or "", brand=project.brand or "",
+            keyword=project_top_keyword(project, exclude),
+            include_language=include_language, grouped=grouped)
         links = sum(r.link_qty for rows in sheets.values() for r in rows)
         results.append({"file": safe_filename(project.url), "links": links, "lang": project.language or "—"})
         record_history(db, project, export_format, sheets)

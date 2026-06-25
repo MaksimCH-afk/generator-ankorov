@@ -170,6 +170,18 @@ def is_crowd_strategy(strategy: Strategy) -> bool:
     return not json.loads(strategy.roles_json or "[]")
 
 
+def project_top_keyword(project: Project, exclude: set[str] | None = None) -> str:
+    """The project's most-relevant keyword by frequency (highest first, file order
+    as tie-break). Used to fill the Keyword column for fully-anchorless (crowd)
+    campaigns, mirroring the "прогоны" logic where the top keyword leads."""
+    exclude = exclude or set()
+    kws = [k for k in project.keywords if k.keyword not in exclude]
+    if not kws:
+        return ""
+    best = min(kws, key=lambda k: (-float(k.frequency), k.position))
+    return best.keyword
+
+
 def main_sheet_name(strategy: Strategy) -> str:
     return "Крауд+сабмиты" if is_crowd_strategy(strategy) else "Прогоны"
 

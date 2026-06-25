@@ -144,19 +144,22 @@ def _write_sheet(wb, ws, rows: list[GeneratedRow], columns: list[str], sprint: s
 
 def build_workbook(sheets: dict[str, list[GeneratedRow]], *, sprint: str = "",
                    seo_specialist: str = "", language: str = "", brand: str = "",
-                   include_language: bool | None = None, grouped: bool = False) -> bytes:
+                   keyword: str = "", include_language: bool | None = None,
+                   grouped: bool = False) -> bytes:
     """Build one .xlsx file. ``sheets`` maps sheet name -> rows.
 
     Uses openpyxl write-only (streaming) mode so even tens of thousands of
     expanded rows stay light on memory. By default each link is its own row;
     with ``grouped=True`` each anchor is a single row plus a leading
-    ``Link Q-ty`` column. ``Article Language`` is appended when a language is set.
+    ``Link Q-ty`` column. ``Article Language`` is appended only when
+    ``include_language`` is true. ``keyword`` is a fallback for the Keyword
+    column when the sheets carry no keyword anchors (fully-anchorless / crowd).
     """
     if include_language is None:
         include_language = bool((language or "").strip())
     columns = (["Link Q-ty"] if grouped else []) + BASE_COLUMNS + ([LANG_COLUMN] if include_language else [])
 
-    keyword = top_keyword(sheets)
+    keyword = top_keyword(sheets) or keyword
     wb = Workbook(write_only=True)
     for name, rows in sheets.items():
         ws = wb.create_sheet(title=_safe_sheet_name(name))
