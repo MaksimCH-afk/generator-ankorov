@@ -113,7 +113,7 @@ async def generate(request: Request, db: Session = Depends(get_db)):
             continue
         files[safe_filename(project.url)] = build_workbook(
             sheets, sprint=sprint, seo_specialist=seo_specialist,
-            language=project.language or "", grouped=grouped)
+            language=project.language or "", brand=project.brand or "", grouped=grouped)
         links = sum(r.link_qty for rows in sheets.values() for r in rows)
         results.append({"file": safe_filename(project.url), "links": links, "lang": project.language or "—"})
         record_history(db, project, export_format, sheets)

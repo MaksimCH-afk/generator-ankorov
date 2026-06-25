@@ -282,10 +282,11 @@ async def batch_keywords(request: Request, db: Session = Depends(get_db)):
                 for domain in domains:
                     existing = by_url(domain)
                     if existing:
+                        existing.language = import_language  # import language wins
                         assign(existing, pairs)
                         updated.append(f"{normalize_domain(domain)} ({len(pairs)} ключей)")
                         log_event(db, "INFO", "import", f"Обновлён проект {normalize_domain(domain)}",
-                                  f"{label}, ключей: {len(pairs)}")
+                                  f"{label}, ключей: {len(pairs)}, язык: {import_language or '—'}")
                     else:
                         project = Project(url=normalize_domain(domain), language=import_language, brand="")
                         db.add(project)
@@ -301,9 +302,11 @@ async def batch_keywords(request: Request, db: Session = Depends(get_db)):
                 log_event(db, "WARNING", "import", f"Не удалось определить проект: {label}",
                           "В листе не найден домен, и имя не совпало ни с одним проектом.")
                 continue
+            target.language = import_language  # import language wins
             assign(target, pairs)
             updated.append(f"{target.url} ({len(pairs)} ключей)")
-            log_event(db, "INFO", "import", f"Обновлён проект {target.url}", f"{label}, ключей: {len(pairs)}")
+            log_event(db, "INFO", "import", f"Обновлён проект {target.url}",
+                      f"{label}, ключей: {len(pairs)}, язык: {import_language or '—'}")
 
     parts = [f"Создано проектов: {len(created)}, обновлено: {len(updated)}."]
     if created:
@@ -328,7 +331,8 @@ def export_project(pid: int, db: Session = Depends(get_db)):
     if not sheets:
         return RedirectResponse(f"/projects/{pid}?msg=Нет данных: задайте стратегию, объём и частотку.",
                                 status_code=303)
-    content = build_workbook(sheets, sprint="", seo_specialist=SEO_SPECIALISTS[0], language=project.language or "")
+    content = build_workbook(sheets, sprint="", seo_specialist=SEO_SPECIALISTS[0],
+                             language=project.language or "", brand=project.brand or "")
     record_history(db, project, "separate", sheets)
     log_event(db, "INFO", "generate", f"Выгружен (с вкладки Проекты) {project.url}",
               f"Стратегия: {project.strategy.name if project.strategy else '—'}, объём: {project.volume}")

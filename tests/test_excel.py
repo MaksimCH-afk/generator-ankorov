@@ -3,7 +3,7 @@ import io
 
 from openpyxl import load_workbook
 
-from app.excel_export import BASE_COLUMNS, build_workbook
+from app.excel_export import BASE_COLUMNS, anchor_type, build_workbook
 from app.generator import GeneratedRow
 
 
@@ -74,6 +74,33 @@ def test_keyword_column_holds_top_keyword_on_every_row():
         ws = wb[sheet]
         for r in range(2, ws.max_row + 1):
             assert [c.value for c in ws[r]][kw_idx] == "betalice"
+
+
+def test_anchor_type_classification():
+    # Branded: bare URL/domain or the brand/site name
+    assert anchor_type("https://betalice.com/", is_keyword=False, brand="", domain="betalice.com") == "BD"
+    assert anchor_type("betalice.com", is_keyword=False, brand="", domain="betalice.com") == "BD"
+    assert anchor_type("AustriaWin24.at", is_keyword=False, brand="AustriaWin24", domain="austriawin24.at") == "BD"
+    assert anchor_type("betalice", is_keyword=True, brand="betalice", domain="x.com") == "BD"
+    # Exact match: a bare keyword, no brand inside
+    assert anchor_type("online casino österreich", is_keyword=True, brand="betalice", domain="x.com") == "EM"
+    assert anchor_type("klarna casino", is_keyword=True, brand="austriawin24", domain="austriawin24.at") == "EM"
+    # Partial match: brand embedded in a phrase, or a non-keyword phrase
+    assert anchor_type("betalice casino", is_keyword=True, brand="betalice", domain="x.com") == "PM"
+    assert anchor_type("Casino bezahlen per Magenta", is_keyword=False, brand="austriawin24", domain="austriawin24.at") == "PM"
+
+
+def test_anchor_type_column_in_export():
+    at_idx = BASE_COLUMNS.index("Anchor Type")
+    wb = _load(build_workbook(_rows(), language="German", brand="betalice"))
+    ws = wb["Прогоны"]
+    types = {[c.value for c in ws[r]][at_idx] for r in range(2, ws.max_row + 1)}
+    # anchorless URL rows -> BD, "betalice" keyword (== brand) -> BD
+    assert types <= {"BD", "EM", "PM"}
+    assert "BD" in types
+    # every Anchor Type cell is a 2-letter code
+    for r in range(2, ws.max_row + 1):
+        assert [c.value for c in ws[r]][at_idx] in ("BD", "EM", "PM")
 
 
 def test_keyword_blank_for_fully_anchorless():

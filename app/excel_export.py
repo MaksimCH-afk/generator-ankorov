@@ -34,10 +34,47 @@ BODY_FONT = Font(color="000000")
 INTERNAL_SHEET = "Внутренние страницы"
 
 
+def _squash(s: str) -> str:
+    """Lowercase, keep only alphanumerics (collapse spaces/punctuation)."""
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def _looks_urlish(s: str) -> bool:
+    v = (s or "").strip().lower()
+    if v.startswith(("http://", "https://")):
+        return True
+    return bool(re.match(r"^([a-z0-9-]+\.)+[a-z]{2,}/?$", v))  # bare domain, e.g. site.co.at
+
+
+def anchor_type(anchor: str, *, is_keyword: bool, brand: str, domain: str) -> str:
+    """Auto-classify an anchor into a 2-letter SEO type:
+
+    * ``BD`` — Branded: the anchor is the brand/site name or a bare URL/domain.
+    * ``EM`` — Exact Match: the anchor is exactly a target keyword.
+    * ``PM`` — Partial Match: a phrase that carries keywords (or the brand) but
+      isn't a bare exact keyword.
+    """
+    a = (anchor or "").strip()
+    if not a:
+        return ""
+    if _looks_urlish(a):
+        return "BD"
+    sq_a = _squash(a)
+    sq_brand = _squash(brand)
+    sq_label = _squash(domain.split(".")[0]) if domain else ""
+    if sq_a and (sq_a == sq_brand or sq_a == sq_label):
+        return "BD"
+    if sq_brand and len(sq_brand) >= 3 and sq_brand in sq_a:
+        return "PM"  # brand embedded in a longer phrase
+    if is_keyword:
+        return "EM"  # exact keyword taken from the frequency list
+    return "PM"      # internal-page / other descriptive phrase
+
+
 def _line(row: GeneratedRow, sprint: str, seo: str, url_type: str,
-          include_language: bool, language: str, keyword: str) -> list:
-    """Build one output line. Link Type / Anchor Type stay empty; Keyword holds
-    the project's most-used keyword (same value on every row)."""
+          include_language: bool, language: str, keyword: str, brand: str) -> list:
+    """Build one output line. Link Type stays empty; Anchor Type is auto-detected
+    (BD/PM/EM) and Keyword holds the project's most-used keyword."""
     line = [
         sprint,
         seo,
@@ -45,7 +82,8 @@ def _line(row: GeneratedRow, sprint: str, seo: str, url_type: str,
         row.url,              # Project Url: the page we link to
         url_type,
         "",                   # Link Type — empty
-        "",                   # Anchor Type — empty
+        anchor_type(row.anchor, is_keyword=getattr(row, "is_keyword", False),
+                    brand=brand, domain=domain_of(row.url)),  # Anchor Type — BD/PM/EM
         row.anchor,           # Anchor — as computed
         keyword,              # Keyword — project's top keyword, on every row
     ]
@@ -72,11 +110,11 @@ def top_keyword(sheets: dict[str, list[GeneratedRow]]) -> str:
 
 def _write_sheet(wb, ws, rows: list[GeneratedRow], columns: list[str], sprint: str, seo: str,
                  url_type: str, include_language: bool, language: str, grouped: bool,
-                 keyword: str) -> None:
+                 keyword: str, brand: str) -> None:
     # Column widths first (write-only mode wants dimensions before rows).
     widths = [len(c) for c in columns]
     for row in rows:
-        line = _line(row, sprint, seo, url_type, include_language, language, keyword)
+        line = _line(row, sprint, seo, url_type, include_language, language, keyword, brand)
         values = ([str(row.link_qty)] + line) if grouped else line
         for i, value in enumerate(values):
             widths[i] = max(widths[i], len(str(value)))
@@ -95,7 +133,7 @@ def _write_sheet(wb, ws, rows: list[GeneratedRow], columns: list[str], sprint: s
 
     # Body — streamed row by row to keep memory flat for large volumes.
     for row in rows:
-        line = _line(row, sprint, seo, url_type, include_language, language, keyword)
+        line = _line(row, sprint, seo, url_type, include_language, language, keyword, brand)
         if grouped:
             if row.link_qty > 0:
                 ws.append([row.link_qty] + line)
@@ -105,7 +143,7 @@ def _write_sheet(wb, ws, rows: list[GeneratedRow], columns: list[str], sprint: s
 
 
 def build_workbook(sheets: dict[str, list[GeneratedRow]], *, sprint: str = "",
-                   seo_specialist: str = "", language: str = "",
+                   seo_specialist: str = "", language: str = "", brand: str = "",
                    include_language: bool | None = None, grouped: bool = False) -> bytes:
     """Build one .xlsx file. ``sheets`` maps sheet name -> rows.
 
@@ -124,7 +162,7 @@ def build_workbook(sheets: dict[str, list[GeneratedRow]], *, sprint: str = "",
         ws = wb.create_sheet(title=_safe_sheet_name(name))
         url_type = "Inner Page" if name == INTERNAL_SHEET else "Main Page"
         _write_sheet(wb, ws, rows, columns, sprint, seo_specialist, url_type,
-                     include_language, language, grouped, keyword)
+                     include_language, language, grouped, keyword, brand)
     if not wb.sheetnames:  # never leave an empty workbook
         wb.create_sheet(title="Empty")
     buffer = io.BytesIO()
