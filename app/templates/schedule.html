@@ -47,8 +47,46 @@
         </label>
         <div id="per-file-rows" style="display:none;margin-top:12px"></div>
         <div class="spacer"></div>
-        <button type="submit">Распределить и скачать</button>
+        <div class="row-actions">
+            <button type="submit">Распределить и скачать</button>
+            <button type="button" class="btn-sec" id="sch-reset">↺ Сбросить</button>
+        </div>
     </form>
+</div>
+
+<div class="card">
+    <div class="row-actions" style="justify-content:space-between;margin-bottom:8px">
+        <div class="card-title" style="margin:0">История распределений</div>
+        {% if history %}
+        <form method="post" action="/schedule/history/clear" onsubmit="return confirm('Очистить всю историю распределений?')">
+            <button class="btn-danger btn-sm" type="submit">Очистить историю</button>
+        </form>
+        {% endif %}
+    </div>
+    {% if history %}
+    <div class="table-wrap" style="border:1px solid var(--line);border-radius:11px">
+    <table>
+        <thead><tr><th>Когда</th><th>Файл</th><th>Детали</th><th></th></tr></thead>
+        <tbody>
+        {% for h in history %}
+            <tr>
+                <td class="ts" style="white-space:nowrap">{{ h.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td class="mono" style="font-size:12.5px">{{ h.filename }}</td>
+                <td class="muted-2" style="font-size:12.5px">{{ h.summary }}</td>
+                <td style="white-space:nowrap;text-align:right">
+                    <a class="btn btn-sec btn-sm" href="/schedule/history/{{ h.id }}">⬇ Скачать</a>
+                    <form method="post" action="/schedule/history/{{ h.id }}/delete" style="display:inline">
+                        <button class="btn-danger btn-sm" type="submit" title="Удалить">✕</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="muted" style="margin:0">Пока нет сохранённых результатов. Они появятся здесь после первого распределения — скачать можно в любой момент.</p>
+    {% endif %}
 </div>
 
 <div class="card">
@@ -119,6 +157,17 @@
     }
     filesInput.addEventListener('change', render);
     perFile.addEventListener('change', render);
+
+    // Reset button: clear the uploaded files and all settings back to defaults.
+    var reset = document.getElementById('sch-reset');
+    if(reset){
+        reset.addEventListener('click', function(){
+            var form = filesInput.form;
+            if(form) form.reset();      // clears file input, day/date, checkboxes
+            rows.innerHTML=''; rows.style.display='none';
+            hint.textContent='';
+        });
+    }
 })();
 </script>
 {% endblock %}

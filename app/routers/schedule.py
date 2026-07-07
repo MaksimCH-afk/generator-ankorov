@@ -9,22 +9,27 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
+from fastapi import HTTPException
+
 from .. import appsettings, scheduling
 from ..database import get_db
 from ..excel_export import build_zip
 from ..jokes import check_key
 from ..logging_util import log_event
+from ..models import ScheduleRun
 from ..templating import templates
 
 router = APIRouter()
 
 XLSX_MEDIA = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_HISTORY_LIMIT = 50
 
 
 @router.get("/schedule", response_class=HTMLResponse)
 def schedule_page(request: Request, db: Session = Depends(get_db), msg: str = "", error: str = ""):
     key = appsettings.get_setting(db, "or_key_schedule", "").strip()
     masked = ("…" + key[-4:]) if len(key) >= 4 else ("задан" if key else "")
+    history = db.query(ScheduleRun).order_by(ScheduleRun.created_at.desc(), ScheduleRun.id.desc()).limit(50).all()
     return templates.TemplateResponse(
         "schedule.html",
         {
@@ -36,6 +41,7 @@ def schedule_page(request: Request, db: Session = Depends(get_db), msg: str = ""
             "key_model": appsettings.get_schedule_model(db),
             "key_model_cheap": appsettings.get_schedule_cheap_model(db),
             "has_any_key": appsettings.get_schedule_slot(db) is not None,
+            "history": history,
             "msg": msg,
             "error": error,
         },
@@ -129,12 +135,57 @@ async def schedule_generate(request: Request, db: Session = Depends(get_db)):
               f"{windows}; классификация: {mode}")
 
     if len(files) == 1:
-        name, content_out = next(iter(files.items()))
-        return Response(content=content_out, media_type=XLSX_MEDIA,
-                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
-    zip_name = f"planning-{start.isoformat()}-{len(files)}files.zip"
-    return Response(content=build_zip(files), media_type="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
+        out_name, out_content = next(iter(files.items()))
+        out_media = XLSX_MEDIA
+    else:
+        out_name = f"planning-{start.isoformat()}-{len(files)}files.zip"
+        out_content, out_media = build_zip(files), "application/zip"
+
+    # Save to history so the result can be re-downloaded any time.
+    summary = (f"{len(plans)} файл(ов), {total_links} ссылок"
+               + (" · индивидуальные сроки" if per_file else f" · {days} дн. с {start.isoformat()}")
+               + f" · {mode}")
+    db.add(ScheduleRun(filename=out_name, media_type=out_media, summary=summary, content=out_content))
+    db.commit()
+    _prune_history(db)
+
+    return Response(content=out_content, media_type=out_media,
+                    headers={"Content-Disposition": f'attachment; filename="{out_name}"'})
+
+
+def _prune_history(db: Session) -> None:
+    """Keep only the most recent runs to bound DB growth."""
+    old = (db.query(ScheduleRun).order_by(ScheduleRun.created_at.desc(), ScheduleRun.id.desc())
+           .offset(_HISTORY_LIMIT).all())
+    for row in old:
+        db.delete(row)
+    if old:
+        db.commit()
+
+
+@router.get("/schedule/history/{run_id}")
+def download_history(run_id: int, db: Session = Depends(get_db)):
+    run = db.get(ScheduleRun, run_id)
+    if not run:
+        raise HTTPException(404, "Результат не найден")
+    return Response(content=run.content, media_type=run.media_type,
+                    headers={"Content-Disposition": f'attachment; filename="{run.filename}"'})
+
+
+@router.post("/schedule/history/{run_id}/delete")
+def delete_history(run_id: int, db: Session = Depends(get_db)):
+    run = db.get(ScheduleRun, run_id)
+    if run:
+        db.delete(run)
+        db.commit()
+    return RedirectResponse("/schedule?msg=Запись истории удалена", status_code=303)
+
+
+@router.post("/schedule/history/clear")
+def clear_history(db: Session = Depends(get_db)):
+    db.query(ScheduleRun).delete()
+    db.commit()
+    return RedirectResponse("/schedule?msg=История распределений очищена", status_code=303)
 
 
 @router.post("/schedule/key")

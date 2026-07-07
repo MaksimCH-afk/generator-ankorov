@@ -21,6 +21,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -216,3 +217,17 @@ class IgnoreAnchor(Base):
 
     id = Column(Integer, primary_key=True)
     phrase = Column(String, unique=True, nullable=False)
+
+
+class ScheduleRun(Base):
+    """A saved result of the Date-distribution tab — the produced .xlsx/.zip is
+    stored so it can be re-downloaded from history at any time."""
+
+    __tablename__ = "schedule_runs"
+
+    id = Column(Integer, primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    filename = Column(String, nullable=False)
+    media_type = Column(String, nullable=False)
+    summary = Column(Text, nullable=False, default="")
+    content = Column(LargeBinary, nullable=False)

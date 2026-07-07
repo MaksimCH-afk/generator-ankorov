@@ -145,6 +145,39 @@ def test_schedule_multiple_files_returns_zip():
         assert "b-2026-08-01-20d.xlsx" in names   # file b: 20 days from Aug 1
 
 
+def test_schedule_history_saved_and_downloadable():
+    import io as _io
+    from openpyxl import Workbook
+    from app.models import ScheduleRun
+
+    def plan_book():
+        wb = Workbook(); ws = wb.active
+        ws.append(["Sprint", "SEO Specialist", "Project", "Project Url", "URL Type",
+                   "Link Type", "Anchor Type", "Anchor", "Keyword"])
+        for _ in range(12):
+            ws.append(["1 S", "M", "h.com", "https://h.com/", "Main Page", "BH", "ND", "https://h.com/", ""])
+        b = _io.BytesIO(); wb.save(b); return b.getvalue()
+
+    with TestClient(app) as c:
+        r = c.post("/schedule/generate",
+                   data={"days": "6", "start_date": "2026-07-09", "use_model": ""},
+                   files=[("files", ("hist.xlsx", plan_book(), "application/octet-stream"))],
+                   follow_redirects=False)
+        assert r.status_code == 200
+        produced = r.content
+        db = SessionLocal()
+        run = db.query(ScheduleRun).order_by(ScheduleRun.id.desc()).first()
+        assert run is not None and run.content == produced   # exact result stored
+        rid = run.id
+        db.close()
+        # re-download later returns the same bytes
+        d = c.get(f"/schedule/history/{rid}")
+        assert d.status_code == 200 and d.content == produced
+        # delete removes it
+        c.post(f"/schedule/history/{rid}/delete", follow_redirects=False)
+        assert SessionLocal().get(ScheduleRun, rid) is None
+
+
 def test_bulk_and_anchors():
     with TestClient(app) as c:
         c.post("/projects/create", data={"url": "https://b1.com/"}, follow_redirects=False)
