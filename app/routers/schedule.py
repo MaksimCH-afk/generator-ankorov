@@ -3,13 +3,15 @@ re-export with a Date column. Optional NN anchor classification (separate key)."
 from __future__ import annotations
 
 import datetime
+import os
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from .. import appsettings, scheduling
 from ..database import get_db
+from ..excel_export import build_zip
 from ..jokes import check_key
 from ..logging_util import log_event
 from ..templating import templates
@@ -32,6 +34,7 @@ def schedule_page(request: Request, db: Session = Depends(get_db), msg: str = ""
             "key_saved": bool(key),
             "key_masked": masked,
             "key_model": appsettings.get_schedule_model(db),
+            "key_model_cheap": appsettings.get_schedule_cheap_model(db),
             "has_any_key": appsettings.get_schedule_slot(db) is not None,
             "msg": msg,
             "error": error,
@@ -40,57 +43,80 @@ def schedule_page(request: Request, db: Session = Depends(get_db), msg: str = ""
 
 
 @router.post("/schedule/generate")
-async def schedule_generate(request: Request, db: Session = Depends(get_db),
-                            file: UploadFile = None, days: int = Form(30),
-                            start_date: str = Form(""), use_model: str = Form("")):
-    if file is None or not getattr(file, "filename", ""):
-        return RedirectResponse("/schedule?error=Выберите файл плана (Excel).", status_code=303)
+async def schedule_generate(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    uploads = [f for f in form.getlist("files") if getattr(f, "filename", "")]
+    if not uploads:
+        return RedirectResponse("/schedule?error=Выберите файл(ы) плана (Excel).", status_code=303)
+    try:
+        days = int(form.get("days") or 30)
+    except ValueError:
+        days = 0
     if days < 1:
         return RedirectResponse("/schedule?error=Количество дней должно быть ≥ 1.", status_code=303)
     try:
-        start = datetime.date.fromisoformat(start_date) if start_date else datetime.date.today()
+        sd = (form.get("start_date") or "").strip()
+        start = datetime.date.fromisoformat(sd) if sd else datetime.date.today()
     except ValueError:
         return RedirectResponse("/schedule?error=Неверная дата начала.", status_code=303)
+    use_model = form.get("use_model") == "on"
 
-    content = await file.read()
-    try:
-        header, links = scheduling.read_plan(content)
-    except Exception:
-        return RedirectResponse("/schedule?error=Не удалось прочитать файл. Нужен Excel, выгруженный из проектов.",
+    # Parse every uploaded plan.
+    plans = []  # (out_name, header, links)
+    for up in uploads:
+        try:
+            header, links = scheduling.read_plan(await up.read())
+        except Exception:
+            continue
+        if links:
+            base = os.path.splitext(os.path.basename(up.filename))[0]
+            plans.append((base, header, links))
+    if not plans:
+        return RedirectResponse("/schedule?error=В файлах нет строк со ссылками (нужен Excel из проектов).",
                                 status_code=303)
-    if not links:
-        return RedirectResponse("/schedule?error=В файле нет строк со ссылками.", status_code=303)
 
-    # Optional NN refinement of anchor categories (separate key).
+    # Classify DISTINCT anchors across ALL files once (smart model for the few
+    # uniques, cheap model as fallback), then apply the buckets to every link.
     mode = "по типам анкоров"
-    if use_model == "on":
-        slot = appsettings.get_schedule_slot(db)
-        if slot:
-            distinct = sorted({l["anchor"] for l in links})
-            labels = scheduling.classify_with_model(distinct, slot[0], slot[1])
-            if labels:
+    if use_model:
+        smart = appsettings.get_schedule_slot(db)
+        cheap = appsettings.get_schedule_cheap_slot(db)
+        if smart:
+            all_anchors = {l["anchor"] for _, _, links in plans for l in links}
+            buckets = scheduling.classify_buckets(all_anchors, smart_slot=smart, cheap_slot=cheap)
+            for _, _, links in plans:
                 for l in links:
-                    l["category"] = labels.get(l["anchor"], l["category"])
-                mode = f"нейросеть ({slot[1]})"
+                    if l["anchor"] in buckets:
+                        l["category"] = buckets[l["anchor"]]
+            mode = f"нейросеть ({smart[1]}" + (f" + {cheap[1]}" if cheap else "") + ")"
 
-    placements = scheduling.distribute(links, days, start)
-    summary = scheduling.summarize(links, days)
-    content_out = scheduling.build_scheduled_workbook(header, placements)
+    # Distribute each file independently over the same window.
+    files: dict[str, bytes] = {}
+    total_links = 0
+    for base, header, links in plans:
+        placements = scheduling.distribute(links, days, start)
+        files[f"{base}-{start.isoformat()}-{days}d.xlsx"] = scheduling.build_scheduled_workbook(header, placements)
+        total_links += len(links)
 
     end = start + datetime.timedelta(days=days - 1)
-    log_event(db, "INFO", "schedule", f"Распределение по датам: {summary['total']} ссылок на {days} дн.",
-              f"{start.isoformat()}—{end.isoformat()}, ~{summary['per_day']}/день; "
-              f"безанкор {summary['anchorless']}, бренд {summary['branded']}, "
-              f"коммерч {summary['commercial']}; классификация: {mode}")
-    fname = f"planning-{start.isoformat()}-{days}d.xlsx"
-    return Response(content=content_out, media_type=XLSX_MEDIA,
-                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+    log_event(db, "INFO", "schedule",
+              f"Распределение по датам: {len(plans)} файл(ов), {total_links} ссылок на {days} дн.",
+              f"{start.isoformat()}—{end.isoformat()}; классификация: {mode}")
+
+    if len(files) == 1:
+        name, content_out = next(iter(files.items()))
+        return Response(content=content_out, media_type=XLSX_MEDIA,
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    zip_name = f"planning-{start.isoformat()}-{days}d.zip"
+    return Response(content=build_zip(files), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
 
 
 @router.post("/schedule/key")
 def save_schedule_key(db: Session = Depends(get_db), key: str = Form(""),
-                      model: str = Form(""), action: str = Form("save")):
+                      model: str = Form(""), model_cheap: str = Form(""), action: str = Form("save")):
     appsettings.set_setting(db, "or_model_schedule", (model or "").strip())
+    appsettings.set_setting(db, "or_model_schedule_cheap", (model_cheap or "").strip())
     if action == "clear":
         appsettings.set_setting(db, "or_key_schedule", "")
         log_event(db, "INFO", "settings", "Ключ распределения по датам очищен")

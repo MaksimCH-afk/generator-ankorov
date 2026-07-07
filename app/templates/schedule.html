@@ -9,16 +9,17 @@
 <div class="card">
     <div class="card-title">Разложить план по датам</div>
     <p class="help-text" style="margin-top:0">
-        Загрузите Excel, выгруженный из проектов (со столбцами Anchor / Anchor Type).
-        Ссылки равномерно распределятся на заданный период: безанкорные (голый URL/домен) — основная масса,
-        а брендовые и коммерческие анкоры разложатся точечно, чтобы встречаться регулярно, но не выглядеть спамом.
-        В выгрузке столбец <span class="mono">Sprint</span> заменяется на <span class="mono">Date</span>.
+        Загрузите Excel, выгруженные из проектов (со столбцами Anchor / Anchor Type). Можно <b>несколько файлов
+        сразу</b> — каждый разложится по датам отдельно, на выходе ZIP-архив. Ссылки распределяются равномерно на
+        период: безанкорные (голый URL/домен) — основная масса, брендовые и коммерческие анкоры — точечно,
+        чтобы встречаться регулярно, но не выглядеть спамом. Столбец <span class="mono">Sprint</span> заменяется
+        на <span class="mono">Date</span>.
     </p>
     <form method="post" action="/schedule/generate" enctype="multipart/form-data">
         <div class="grid grid-3">
             <div class="field">
-                <label>Файл плана (.xlsx)</label>
-                <input type="file" name="file" accept=".xlsx,.xlsm" required>
+                <label>Файлы планов (.xlsx) — можно несколько</label>
+                <input type="file" name="files" accept=".xlsx,.xlsm" multiple required>
             </div>
             <div class="field">
                 <label>Период, дней</label>
@@ -46,8 +47,10 @@
     <div class="card-title">Ключ OpenRouter (для классификации анкоров)</div>
     <p class="help-text" style="margin-top:0">
         Отдельный ключ для этой вкладки (не обязателен — по умолчанию тип берётся из столбца
-        <span class="mono">Anchor Type</span>). Классификация — дешёвая задача, поэтому по умолчанию мини-модель
-        <span class="mono">{{ key_model }}</span>. Ключ хранится локально и не показывается целиком.
+        <span class="mono">Anchor Type</span>). Классифицируются только <b>уникальные</b> анкоры (их обычно единицы
+        даже на тысячи ссылок), поэтому для них используется <b>умная модель</b>
+        (<span class="mono">{{ key_model }}</span>), а <b>дешёвая</b> (<span class="mono">{{ key_model_cheap }}</span>) —
+        как запасная для тех, что умная не разметила. Ключ хранится локально и не показывается целиком.
     </p>
     <form method="post" action="/schedule/key" style="margin-bottom:12px">
         <div style="margin-bottom:8px">
@@ -55,13 +58,17 @@
             {% else %}<span class="badge gray">ключ не задан</span>{% endif %}
         </div>
         <div class="inline">
-            <div style="flex:1;min-width:240px">
+            <div style="flex:1;min-width:220px">
                 <label>API-ключ</label>
                 <input type="text" name="key" placeholder="sk-or-v1-…  (пусто = не менять)" autocomplete="off">
             </div>
-            <div style="flex:1;min-width:220px">
-                <label>Модель (id из OpenRouter)</label>
-                <input type="text" name="model" class="mono" value="{{ key_model }}" placeholder="openai/gpt-4o-mini">
+            <div style="flex:1;min-width:180px">
+                <label>Умная модель</label>
+                <input type="text" name="model" class="mono" value="{{ key_model }}" placeholder="openai/gpt-4o">
+            </div>
+            <div style="flex:1;min-width:180px">
+                <label>Дешёвая (запасная)</label>
+                <input type="text" name="model_cheap" class="mono" value="{{ key_model_cheap }}" placeholder="openai/gpt-4o-mini">
             </div>
             <button class="narrow" type="submit" name="action" value="save">Сохранить</button>
             {% if key_saved %}<button class="btn-danger btn-sm narrow" type="submit" name="action" value="clear">Очистить</button>{% endif %}

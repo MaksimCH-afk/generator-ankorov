@@ -108,6 +108,31 @@ def test_duplicate_project_reuses_keywords():
         assert "location" in r2.headers
 
 
+def test_schedule_multiple_files_returns_zip():
+    import io as _io
+    import zipfile
+    from openpyxl import Workbook
+
+    def plan_book(project):
+        wb = Workbook(); ws = wb.active
+        ws.append(["Sprint", "SEO Specialist", "Project", "Project Url", "URL Type",
+                   "Link Type", "Anchor Type", "Anchor", "Keyword"])
+        for _ in range(20):
+            ws.append(["1 S", "M", project, f"https://{project}/", "Main Page", "BH",
+                       "ND", f"https://{project}/", ""])
+        b = _io.BytesIO(); wb.save(b); return b.getvalue()
+
+    with TestClient(app) as c:
+        r = c.post("/schedule/generate",
+                   data={"days": "10", "start_date": "2026-07-09", "use_model": ""},
+                   files=[("files", ("a.xlsx", plan_book("a-casino.com"), "application/octet-stream")),
+                          ("files", ("b.xlsx", plan_book("b-casino.com"), "application/octet-stream"))],
+                   follow_redirects=False)
+        assert r.status_code == 200 and "zip" in r.headers["content-type"]
+        zf = zipfile.ZipFile(_io.BytesIO(r.content))
+        assert len(zf.namelist()) == 2  # one scheduled file per input
+
+
 def test_bulk_and_anchors():
     with TestClient(app) as c:
         c.post("/projects/create", data={"url": "https://b1.com/"}, follow_redirects=False)

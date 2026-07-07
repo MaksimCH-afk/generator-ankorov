@@ -19,9 +19,11 @@ DEFAULT_MODELS = {
     2: "qwen/qwen3-next-80b-a3b-instruct:free",
 }
 
-# Separate slot for the Date-distribution tab. Classification is a cheap 3-way
-# task, so a mini model is deliberate (no flagship model needed).
-SCHEDULE_DEFAULT_MODEL = "openai/gpt-4o-mini"
+# Date-distribution tab. Only the *distinct* anchors are classified (usually a
+# handful even for thousands of links), so we can afford a strong "smart" model
+# for them and fall back to a cheap model only if the smart one fails.
+SCHEDULE_DEFAULT_MODEL = "openai/gpt-4o"        # smart (few unique anchors -> cheap overall)
+SCHEDULE_CHEAP_MODEL = "openai/gpt-4o-mini"     # fallback
 
 
 def get_setting(db: Session, key: str, default: str = "") -> str:
@@ -66,7 +68,13 @@ def slot_status(db: Session) -> dict[int, bool]:
 
 
 def get_schedule_model(db: Session) -> str:
+    """Smart model for classifying distinct anchors."""
     return get_setting(db, "or_model_schedule", "").strip() or SCHEDULE_DEFAULT_MODEL
+
+
+def get_schedule_cheap_model(db: Session) -> str:
+    """Cheap fallback model, used only for anchors the smart model didn't label."""
+    return get_setting(db, "or_model_schedule_cheap", "").strip() or SCHEDULE_CHEAP_MODEL
 
 
 def get_any_slot(db: Session) -> tuple[str, str] | None:
@@ -76,14 +84,25 @@ def get_any_slot(db: Session) -> tuple[str, str] | None:
     return slots[0] if slots else None
 
 
-def get_schedule_slot(db: Session) -> tuple[str, str] | None:
-    """``(key, model)`` for the Date-distribution tab, or ``None`` if no key.
-
-    Falls back to slot-1 / env key so an already-configured key can be reused."""
+def get_schedule_key(db: Session) -> str:
+    """Resolved key for the Date-distribution tab (own key, else a configured one)."""
     key = get_setting(db, "or_key_schedule", "").strip()
     if key:
-        return key, get_schedule_model(db)
+        return key
     slots = get_slots(db)  # reuse a configured joke/filter key if present
-    if slots:
-        return slots[0][0], get_schedule_model(db)
+    return slots[0][0] if slots else ""
+
+
+def get_schedule_slot(db: Session) -> tuple[str, str] | None:
+    """``(key, smart_model)`` for the Date-distribution tab, or ``None`` if no key."""
+    key = get_schedule_key(db)
+    return (key, get_schedule_model(db)) if key else None
+
+
+def get_schedule_cheap_slot(db: Session) -> tuple[str, str] | None:
+    """``(key, cheap_model)`` fallback slot, or ``None`` if no key / same as smart."""
+    key = get_schedule_key(db)
+    cheap = get_schedule_cheap_model(db)
+    if key and cheap and cheap != get_schedule_model(db):
+        return key, cheap
     return None

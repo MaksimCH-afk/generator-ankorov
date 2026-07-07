@@ -60,6 +60,31 @@ def test_read_plan_and_distribute():
     assert max(comm.values()) == 1 and len(comm) == 9
 
 
+def test_classify_buckets_two_tier(monkeypatch):
+    from app import anchortypes
+    calls = []
+
+    def fake_llm(anchors, key, model):
+        calls.append((model, tuple(anchors)))
+        if model == "smart":
+            # smart labels only the exact keyword
+            return {a: "EM" for a in anchors if a == "online casino"}
+        if model == "cheap":
+            # cheap labels the brand phrase
+            return {a: "BD" for a in anchors if a == "MyBrand"}
+        return {}
+
+    monkeypatch.setattr(anchortypes, "llm_classify", fake_llm)
+    anchors = ["online casino", "MyBrand", "https://x.at/"]  # last is deterministic ND
+    buckets = S.classify_buckets(anchors, smart_slot=("k", "smart"), cheap_slot=("k", "cheap"))
+    assert buckets["online casino"] == S.COMMERCIAL     # from smart (EM)
+    assert buckets["MyBrand"] == S.BRANDED              # from cheap fallback (BD)
+    assert buckets["https://x.at/"] == S.ANCHORLESS     # deterministic (ND)
+    # cheap model only saw the anchors smart didn't label
+    cheap_call = [c for c in calls if c[0] == "cheap"][0]
+    assert "online casino" not in cheap_call[1]
+
+
 def test_build_scheduled_workbook_replaces_sprint_with_date():
     rows = [["1 S", "Miles", "x.com", "https://x.com/", "Main Page", "BH", "BD",
              "https://x.com/", "x"] for _ in range(10)]

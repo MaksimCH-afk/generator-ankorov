@@ -143,10 +143,29 @@ def distribute(links: list[dict], days: int, start_date: datetime.date) -> list[
     return out
 
 
-def classify_with_model(anchors: list[str], key: str, model: str) -> dict[str, str]:
-    """Optional NN refinement (company 7-type rubric) mapped to cadence buckets."""
-    types = anchortypes.llm_classify(anchors, key, model)
+def classify_buckets(anchors, smart_slot=None, cheap_slot=None) -> dict[str, str]:
+    """Map distinct anchors -> cadence bucket.
+
+    Only unique anchors are sent to the model (few even for thousands of links),
+    so we use the *smart* model for them and fall back to the *cheap* model only
+    for anchors it failed to label; anything still unlabeled is classified
+    deterministically. Returns ``{anchor: bucket}``.
+    """
+    distinct = sorted(set(anchors))
+    types: dict[str, str] = {}
+    if smart_slot:
+        types.update(anchortypes.llm_classify(distinct, smart_slot[0], smart_slot[1]))
+    missing = [a for a in distinct if a not in types]
+    if missing and cheap_slot:
+        types.update(anchortypes.llm_classify(missing, cheap_slot[0], cheap_slot[1]))
+    for a in distinct:  # deterministic fill for anything still unlabeled
+        types.setdefault(a, anchortypes.classify_one(a))
     return {a: bucket_of(code) for a, code in types.items()}
+
+
+def classify_with_model(anchors: list[str], key: str, model: str) -> dict[str, str]:
+    """Back-compat single-model classification (distinct anchors -> buckets)."""
+    return classify_buckets(anchors, smart_slot=(key, model))
 
 
 def build_scheduled_workbook(header: list[str], placements: list[tuple[datetime.date, dict]],
