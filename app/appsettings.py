@@ -19,6 +19,10 @@ DEFAULT_MODELS = {
     2: "qwen/qwen3-next-80b-a3b-instruct:free",
 }
 
+# Separate slot for the Date-distribution tab. Classification is a cheap 3-way
+# task, so a mini model is deliberate (no flagship model needed).
+SCHEDULE_DEFAULT_MODEL = "openai/gpt-4o-mini"
+
 
 def get_setting(db: Session, key: str, default: str = "") -> str:
     row = db.get(AppSetting, key)
@@ -59,3 +63,20 @@ def get_slots(db: Session) -> list[tuple[str, str]]:
 def slot_status(db: Session) -> dict[int, bool]:
     """Whether each slot has a key saved."""
     return {i: bool(get_setting(db, f"or_key_{i}", "").strip()) for i in (1, 2)}
+
+
+def get_schedule_model(db: Session) -> str:
+    return get_setting(db, "or_model_schedule", "").strip() or SCHEDULE_DEFAULT_MODEL
+
+
+def get_schedule_slot(db: Session) -> tuple[str, str] | None:
+    """``(key, model)`` for the Date-distribution tab, or ``None`` if no key.
+
+    Falls back to slot-1 / env key so an already-configured key can be reused."""
+    key = get_setting(db, "or_key_schedule", "").strip()
+    if key:
+        return key, get_schedule_model(db)
+    slots = get_slots(db)  # reuse a configured joke/filter key if present
+    if slots:
+        return slots[0][0], get_schedule_model(db)
+    return None

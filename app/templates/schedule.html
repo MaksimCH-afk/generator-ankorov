@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block page_title %}Распределение по датам{% endblock %}
+{% block subtitle %}Загрузите готовый план (выгрузку проекта) — разложим ссылки по дням с безопасной каденцией анкоров.{% endblock %}
+
+{% block content %}
+{% if msg %}<div class="card" style="border-color:#1BA45A33;background:#1BA45A0D"><p style="margin:0;color:#158043">{{ msg }}</p></div>{% endif %}
+{% if error %}<div class="card" style="border-color:#E5484D33;background:#E5484D0D"><p style="margin:0;color:#C4292E">{{ error }}</p></div>{% endif %}
+
+<div class="card">
+    <div class="card-title">Разложить план по датам</div>
+    <p class="help-text" style="margin-top:0">
+        Загрузите Excel, выгруженный из проектов (со столбцами Anchor / Anchor Type).
+        Ссылки равномерно распределятся на заданный период: безанкорные (голый URL/домен) — основная масса,
+        а брендовые и коммерческие анкоры разложатся точечно, чтобы встречаться регулярно, но не выглядеть спамом.
+        В выгрузке столбец <span class="mono">Sprint</span> заменяется на <span class="mono">Date</span>.
+    </p>
+    <form method="post" action="/schedule/generate" enctype="multipart/form-data">
+        <div class="grid grid-3">
+            <div class="field">
+                <label>Файл плана (.xlsx)</label>
+                <input type="file" name="file" accept=".xlsx,.xlsm" required>
+            </div>
+            <div class="field">
+                <label>Период, дней</label>
+                <input type="number" name="days" min="1" value="30">
+            </div>
+            <div class="field">
+                <label>Дата начала</label>
+                <input type="date" name="start_date" value="{{ today }}">
+            </div>
+        </div>
+        <label class="toggle-row" style="margin-top:6px">
+            <input type="checkbox" name="use_model" value="on" {{ 'disabled' if not has_any_key }}>
+            <span>
+                <b>Уточнять типы анкоров нейросетью</b>
+                {% if has_any_key %}<span class="badge green" style="margin-left:6px">ключ подключён</span>
+                {% else %}<span class="badge gray" style="margin-left:6px">добавьте ключ ниже — без него работает по столбцу Anchor Type</span>{% endif %}
+            </span>
+        </label>
+        <div class="spacer"></div>
+        <button type="submit">Распределить и скачать</button>
+    </form>
+</div>
+
+<div class="card">
+    <div class="card-title">Ключ OpenRouter (для классификации анкоров)</div>
+    <p class="help-text" style="margin-top:0">
+        Отдельный ключ для этой вкладки (не обязателен — по умолчанию тип берётся из столбца
+        <span class="mono">Anchor Type</span>). Классификация — дешёвая задача, поэтому по умолчанию мини-модель
+        <span class="mono">{{ key_model }}</span>. Ключ хранится локально и не показывается целиком.
+    </p>
+    <form method="post" action="/schedule/key" style="margin-bottom:12px">
+        <div style="margin-bottom:8px">
+            {% if key_saved %}<span class="badge green">ключ сохранён {{ key_masked }}</span>
+            {% else %}<span class="badge gray">ключ не задан</span>{% endif %}
+        </div>
+        <div class="inline">
+            <div style="flex:1;min-width:240px">
+                <label>API-ключ</label>
+                <input type="text" name="key" placeholder="sk-or-v1-…  (пусто = не менять)" autocomplete="off">
+            </div>
+            <div style="flex:1;min-width:220px">
+                <label>Модель (id из OpenRouter)</label>
+                <input type="text" name="model" class="mono" value="{{ key_model }}" placeholder="openai/gpt-4o-mini">
+            </div>
+            <button class="narrow" type="submit" name="action" value="save">Сохранить</button>
+            {% if key_saved %}<button class="btn-danger btn-sm narrow" type="submit" name="action" value="clear">Очистить</button>{% endif %}
+        </div>
+    </form>
+    <form method="post" action="/schedule/check" style="display:inline">
+        <button class="btn-sec btn-sm" type="submit">Проверить ключ</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block help_text %}
+<p>Функционал независим от генерации: сюда вы подаёте <b>уже готовую выгрузку</b> проекта и получаете тот же план, разложенный по датам.</p>
+<p>Логика: всего ссылок ÷ дней = среднее в день; остаток раскидывается равномерно (каждый ~N-й день +1). Коммерческие и брендовые анкоры распределяются точечно и равномерно по всему периоду, безанкорные заполняют остальное. Дата у каждой строки = дата начала + смещение по дню.</p>
+{% endblock %}

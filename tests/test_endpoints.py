@@ -17,7 +17,7 @@ def _project_id(url: str) -> int:
 def test_health_and_pages():
     with TestClient(app) as c:
         assert c.get("/health").json()["status"] == "ok"
-        for p in ["/", "/generate", "/strategies", "/profiles", "/suffixes",
+        for p in ["/", "/generate", "/schedule", "/strategies", "/profiles", "/suffixes",
                   "/history", "/logs", "/anchors"]:
             assert c.get(p).status_code == 200
 

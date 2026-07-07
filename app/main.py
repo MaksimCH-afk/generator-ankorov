@@ -14,6 +14,7 @@ from .routers import (
     logs,
     profiles,
     projects,
+    schedule,
     strategies,
     suffixes,
 )
@@ -24,7 +25,7 @@ BASE_DIR = os.path.dirname(__file__)
 app = FastAPI(title="HubNero · Генератор анкоров")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
-for module in (projects, generation, strategies, profiles, suffixes, history, logs, anchors):
+for module in (projects, generation, schedule, strategies, profiles, suffixes, history, logs, anchors):
     app.include_router(module.router)
 
 
