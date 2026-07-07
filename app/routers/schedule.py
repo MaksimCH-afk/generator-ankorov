@@ -60,17 +60,40 @@ async def schedule_generate(request: Request, db: Session = Depends(get_db)):
     except ValueError:
         return RedirectResponse("/schedule?error=Неверная дата начала.", status_code=303)
     use_model = form.get("use_model") == "on"
+    # Per-file periods/start dates (aligned to upload order); global values are
+    # the fallback for any file without its own values.
+    per_file = form.get("per_file") == "on"
+    per_days = form.getlist("per_days")
+    per_start = form.getlist("per_start")
 
-    # Parse every uploaded plan.
-    plans = []  # (out_name, header, links)
-    for up in uploads:
+    def resolve_days(i: int) -> int:
+        if per_file and i < len(per_days):
+            try:
+                v = int(per_days[i])
+                if v >= 1:
+                    return v
+            except ValueError:
+                pass
+        return days
+
+    def resolve_start(i: int) -> datetime.date:
+        if per_file and i < len(per_start) and str(per_start[i]).strip():
+            try:
+                return datetime.date.fromisoformat(str(per_start[i]).strip())
+            except ValueError:
+                pass
+        return start
+
+    # Parse every uploaded plan (keep its own days/start by upload index).
+    plans = []  # (base, header, links, days_i, start_i)
+    for i, up in enumerate(uploads):
         try:
             header, links = scheduling.read_plan(await up.read())
         except Exception:
             continue
         if links:
             base = os.path.splitext(os.path.basename(up.filename))[0]
-            plans.append((base, header, links))
+            plans.append((base, header, links, resolve_days(i), resolve_start(i)))
     if not plans:
         return RedirectResponse("/schedule?error=В файлах нет строк со ссылками (нужен Excel из проектов).",
                                 status_code=303)
@@ -82,32 +105,34 @@ async def schedule_generate(request: Request, db: Session = Depends(get_db)):
         smart = appsettings.get_schedule_slot(db)
         cheap = appsettings.get_schedule_cheap_slot(db)
         if smart:
-            all_anchors = {l["anchor"] for _, _, links in plans for l in links}
+            all_anchors = {l["anchor"] for _, _, links, _, _ in plans for l in links}
             buckets = scheduling.classify_buckets(all_anchors, smart_slot=smart, cheap_slot=cheap)
-            for _, _, links in plans:
+            for _, _, links, _, _ in plans:
                 for l in links:
                     if l["anchor"] in buckets:
                         l["category"] = buckets[l["anchor"]]
             mode = f"нейросеть ({smart[1]}" + (f" + {cheap[1]}" if cheap else "") + ")"
 
-    # Distribute each file independently over the same window.
+    # Distribute each file independently over its own window.
     files: dict[str, bytes] = {}
     total_links = 0
-    for base, header, links in plans:
-        placements = scheduling.distribute(links, days, start)
-        files[f"{base}-{start.isoformat()}-{days}d.xlsx"] = scheduling.build_scheduled_workbook(header, placements)
+    for base, header, links, days_i, start_i in plans:
+        placements = scheduling.distribute(links, days_i, start_i)
+        files[f"{base}-{start_i.isoformat()}-{days_i}d.xlsx"] = \
+            scheduling.build_scheduled_workbook(header, placements)
         total_links += len(links)
 
-    end = start + datetime.timedelta(days=days - 1)
+    windows = "; ".join(f"{b}: {s.isoformat()} +{d}д" for b, _, _, d, s in plans)
     log_event(db, "INFO", "schedule",
-              f"Распределение по датам: {len(plans)} файл(ов), {total_links} ссылок на {days} дн.",
-              f"{start.isoformat()}—{end.isoformat()}; классификация: {mode}")
+              f"Распределение по датам: {len(plans)} файл(ов), {total_links} ссылок"
+              + (" (индивидуальные сроки)" if per_file else f", {days} дн."),
+              f"{windows}; классификация: {mode}")
 
     if len(files) == 1:
         name, content_out = next(iter(files.items()))
         return Response(content=content_out, media_type=XLSX_MEDIA,
                         headers={"Content-Disposition": f'attachment; filename="{name}"'})
-    zip_name = f"planning-{start.isoformat()}-{days}d.zip"
+    zip_name = f"planning-{start.isoformat()}-{len(files)}files.zip"
     return Response(content=build_zip(files), media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
 

@@ -132,6 +132,18 @@ def test_schedule_multiple_files_returns_zip():
         zf = zipfile.ZipFile(_io.BytesIO(r.content))
         assert len(zf.namelist()) == 2  # one scheduled file per input
 
+        # per-file periods/start dates align to upload order
+        r2 = c.post("/schedule/generate",
+                    data={"days": "30", "start_date": "2026-07-09", "use_model": "",
+                          "per_file": "on", "per_days": ["10", "20"],
+                          "per_start": ["2026-07-01", "2026-08-01"]},
+                    files=[("files", ("a.xlsx", plan_book("a-casino.com"), "application/octet-stream")),
+                           ("files", ("b.xlsx", plan_book("b-casino.com"), "application/octet-stream"))],
+                    follow_redirects=False)
+        names = zipfile.ZipFile(_io.BytesIO(r2.content)).namelist()
+        assert "a-2026-07-01-10d.xlsx" in names   # file a: 10 days from Jul 1
+        assert "b-2026-08-01-20d.xlsx" in names   # file b: 20 days from Aug 1
+
 
 def test_bulk_and_anchors():
     with TestClient(app) as c:

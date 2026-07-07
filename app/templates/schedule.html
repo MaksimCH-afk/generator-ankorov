@@ -19,15 +19,15 @@
         <div class="grid grid-3">
             <div class="field">
                 <label>Файлы планов (.xlsx) — можно несколько</label>
-                <input type="file" name="files" accept=".xlsx,.xlsm" multiple required>
+                <input type="file" id="sch-files" name="files" accept=".xlsx,.xlsm" multiple required>
             </div>
             <div class="field">
-                <label>Период, дней</label>
-                <input type="number" name="days" min="1" value="30">
+                <label>Период, дней <span id="days-hint" class="muted-2" style="text-transform:none;font-weight:500"></span></label>
+                <input type="number" id="sch-days" name="days" min="1" value="30">
             </div>
             <div class="field">
                 <label>Дата начала</label>
-                <input type="date" name="start_date" value="{{ today }}">
+                <input type="date" id="sch-start" name="start_date" value="{{ today }}">
             </div>
         </div>
         <label class="toggle-row" style="margin-top:6px">
@@ -38,6 +38,14 @@
                 {% else %}<span class="badge gray" style="margin-left:6px">добавьте ключ ниже — без него работает по столбцу Anchor Type</span>{% endif %}
             </span>
         </label>
+        <label class="toggle-row" style="margin-top:10px">
+            <input type="checkbox" id="sch-perfile" name="per_file" value="on">
+            <span>
+                <b>Свой период и дата для каждого файла</b>
+                <span class="badge gray" style="margin-left:6px">иначе для всех — общие настройки сверху</span>
+            </span>
+        </label>
+        <div id="per-file-rows" style="display:none;margin-top:12px"></div>
         <div class="spacer"></div>
         <button type="submit">Распределить и скачать</button>
     </form>
@@ -80,7 +88,43 @@
 </div>
 {% endblock %}
 
+{% block scripts %}
+<script>
+// Per-file period/start rows: rendered in the SAME order as the selected files
+// so per_days[i]/per_start[i] line up with files[i] on the server.
+(function(){
+    var filesInput = document.getElementById('sch-files');
+    var perFile = document.getElementById('sch-perfile');
+    var rows = document.getElementById('per-file-rows');
+    var gDays = document.getElementById('sch-days');
+    var gStart = document.getElementById('sch-start');
+    var hint = document.getElementById('days-hint');
+    if(!filesInput || !perFile || !rows) return;
+
+    function render(){
+        var on = perFile.checked;
+        var list = filesInput.files || [];
+        hint.textContent = on ? '(общие — как запасные)' : '';
+        if(!on || list.length === 0){ rows.style.display='none'; rows.innerHTML=''; return; }
+        var html = '<div class="table-wrap" style="border:1px solid var(--line);border-radius:11px">'
+            + '<table><thead><tr><th>Файл</th><th style="width:130px">Период, дней</th>'
+            + '<th style="width:180px">Дата начала</th></tr></thead><tbody>';
+        for(var i=0;i<list.length;i++){
+            html += '<tr><td class="mono" style="font-size:12.5px">'+list[i].name+'</td>'
+                + '<td><input type="number" name="per_days" min="1" value="'+(gDays.value||30)+'" style="width:110px"></td>'
+                + '<td><input type="date" name="per_start" value="'+(gStart.value||'')+'" style="width:160px"></td></tr>';
+        }
+        html += '</tbody></table></div>';
+        rows.innerHTML = html; rows.style.display='block';
+    }
+    filesInput.addEventListener('change', render);
+    perFile.addEventListener('change', render);
+})();
+</script>
+{% endblock %}
+
 {% block help_text %}
 <p>Функционал независим от генерации: сюда вы подаёте <b>уже готовую выгрузку</b> проекта и получаете тот же план, разложенный по датам.</p>
+<p>Массовая загрузка: включите «Свой период и дата для каждого файла», чтобы задать сроки индивидуально; иначе для всех файлов применяются общие настройки сверху.</p>
 <p>Логика: всего ссылок ÷ дней = среднее в день; остаток раскидывается равномерно (каждый ~N-й день +1). Коммерческие и брендовые анкоры распределяются точечно и равномерно по всему периоду, безанкорные заполняют остальное. Дата у каждой строки = дата начала + смещение по дню.</p>
 {% endblock %}
