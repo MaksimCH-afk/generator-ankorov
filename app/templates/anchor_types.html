@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block page_title %}Типы анкоров{% endblock %}
+{% block subtitle %}Справочник: внутренняя классификация анкорных текстов при работе с внешними ссылками (PBN, аутрич, крауд).{% endblock %}
+
+{% block content %}
+<div class="card">
+    <p class="help-text" style="margin-top:0">
+        Тип анкора определяется автоматически и проставляется в столбце <span class="mono">Anchor Type</span>
+        при выгрузке, а также используется в «Распределении по датам». По умолчанию — по правилам;
+        при подключённом ключе OpenRouter типы уточняет нейросеть по этому справочнику.
+        Всего 7 типов: <b>ND, BD, EM, PM, G, BD+PM, NT</b>.
+    </p>
+</div>
+
+{% for r in reference %}
+<div class="card">
+    <div class="card-title"><span class="mono" style="color:var(--accent-2)">{{ r.code }}</span> — {{ r.name }}</div>
+    <p style="margin:6px 0 10px">{{ r.definition }}</p>
+    <div class="help-text" style="margin:0">Примеры:</div>
+    <ul style="margin:6px 0 0;padding-left:20px">
+        {% for ex in r.examples %}<li class="mono" style="font-size:13px">{{ ex }}</li>{% endfor %}
+    </ul>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block help_text %}
+<p>Классификация построена на типологии Ahrefs / Moz / SE Ranking и адаптирована под работу компании. Признак <b>ND</b> — наличие <span class="mono">https://</span> в анкоре; голый домен без протокола (<span class="mono">site.at</span>) — это уже <b>BD</b>.</p>
+<p>Гибрид <b>BD+PM</b> фиксируется отдельно (не как BD или PM по отдельности). <b>NT</b> — ссылка с изображения, без текстового анкора.</p>
+{% endblock %}

@@ -21,31 +21,41 @@ from __future__ import annotations
 
 import datetime
 import io
-import re
 from collections import defaultdict
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.cell import WriteOnlyCell
 from openpyxl.utils import get_column_letter
 
-from .excel_export import HEADER_FILL, HEADER_FONT, _looks_urlish
-from .jokes import openrouter_chat
+from . import anchortypes
+from .excel_export import HEADER_FILL, HEADER_FONT
 
-# Categories used for the cadence logic.
+# Cadence buckets used by the distribution: anchorless = safe bulk, branded =
+# regular, commercial = spread pointwise.
 ANCHORLESS, BRANDED, COMMERCIAL = "anchorless", "branded", "commercial"
 _PRIORITY = {COMMERCIAL: 0, BRANDED: 1, ANCHORLESS: 2}
 
+# Company 7-type -> cadence bucket.
+_BUCKET = {
+    anchortypes.ND: ANCHORLESS, anchortypes.NT: ANCHORLESS,
+    anchortypes.BD: BRANDED, anchortypes.G: BRANDED,
+    anchortypes.EM: COMMERCIAL, anchortypes.PM: COMMERCIAL, anchortypes.BDPM: COMMERCIAL,
+}
+
+
+def bucket_of(type_code: str) -> str:
+    return _BUCKET.get((type_code or "").strip().upper(), COMMERCIAL)
+
 
 def classify(anchor: str, anchor_type: str) -> str:
-    """Deterministic 3-way category from the anchor text + its BD/EM/PM type."""
-    if _looks_urlish(anchor):
-        return ANCHORLESS
+    """Cadence bucket from the plan's Anchor Type column (any of the 7 codes),
+    falling back to the deterministic company classifier on the anchor text."""
+    if anchortypes.looks_naked_url(anchor):
+        return ANCHORLESS  # a naked URL is always safe filler, regardless of label
     at = (anchor_type or "").strip().upper()
-    if at == "BD":
-        return BRANDED
-    if at in ("EM", "PM"):
-        return COMMERCIAL
-    return COMMERCIAL  # non-URL, unknown type -> treat as money
+    if at in _BUCKET:
+        return bucket_of(at)
+    return bucket_of(anchortypes.classify_one(anchor))
 
 
 def read_plan(content: bytes) -> tuple[list[str], list[dict]]:
@@ -134,28 +144,9 @@ def distribute(links: list[dict], days: int, start_date: datetime.date) -> list[
 
 
 def classify_with_model(anchors: list[str], key: str, model: str) -> dict[str, str]:
-    """Optional NN refinement: label distinct anchors anchorless/branded/commercial."""
-    result: dict[str, str] = {}
-    letter = {"A": ANCHORLESS, "B": BRANDED, "C": COMMERCIAL}
-    chunk = 50
-    for i in range(0, len(anchors), chunk):
-        part = anchors[i:i + chunk]
-        numbered = "\n".join(f"{j + 1}. {a}" for j, a in enumerate(part))
-        prompt = (
-            "Классифицируй каждый анкор для линкбилдинга в одну из категорий:\n"
-            "A = безанкорный (голый URL или домен),\n"
-            "B = брендовый (название бренда/сайта),\n"
-            "C = коммерческий (ключевой/поисковый запрос).\n"
-            "Ответь строками вида «номер=буква», без пояснений.\n\n" + numbered
-        )
-        text = openrouter_chat(key, model, prompt, max_tokens=600, timeout=20)
-        if not text:
-            continue
-        for m in re.finditer(r"(\d+)\s*=\s*([ABC])", text, re.I):
-            j = int(m.group(1)) - 1
-            if 0 <= j < len(part):
-                result[part[j]] = letter[m.group(2).upper()]
-    return result
+    """Optional NN refinement (company 7-type rubric) mapped to cadence buckets."""
+    types = anchortypes.llm_classify(anchors, key, model)
+    return {a: bucket_of(code) for a, code in types.items()}
 
 
 def build_scheduled_workbook(header: list[str], placements: list[tuple[datetime.date, dict]],

@@ -69,6 +69,13 @@ def get_schedule_model(db: Session) -> str:
     return get_setting(db, "or_model_schedule", "").strip() or SCHEDULE_DEFAULT_MODEL
 
 
+def get_any_slot(db: Session) -> tuple[str, str] | None:
+    """First available ``(key, model)`` — any configured/env key. Used for
+    company anchor-type classification, which works with any OpenRouter key."""
+    slots = get_slots(db)
+    return slots[0] if slots else None
+
+
 def get_schedule_slot(db: Session) -> tuple[str, str] | None:
     """``(key, model)`` for the Date-distribution tab, or ``None`` if no key.
 

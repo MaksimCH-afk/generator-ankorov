@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
+from .. import anchortypes
 from ..database import get_db
 from ..excel_export import build_workbook, safe_filename
 from ..helpers import match_project, project_progress, project_view, record_history
@@ -392,9 +393,13 @@ def export_project(pid: int, db: Session = Depends(get_db)):
     if not sheets:
         return RedirectResponse(f"/projects/{pid}?msg=Нет данных: задайте стратегию, объём и частотку.",
                                 status_code=303)
+    anchors = {r.anchor for rows in sheets.values() for r in rows}
+    type_map = anchortypes.build_type_map(anchors, brand=project.brand or "",
+                                          keywords=[k.keyword for k in project.keywords])
     content = build_workbook(sheets, sprint="", seo_specialist=SEO_SPECIALISTS[0],
                              language=project.language or "", brand=project.brand or "",
-                             keyword=project_top_keyword(project), include_language=False)
+                             keyword=project_top_keyword(project), type_map=type_map,
+                             include_language=False)
     record_history(db, project, "separate", sheets)
     log_event(db, "INFO", "generate", f"Выгружен (с вкладки Проекты) {project.url}",
               f"Стратегия: {project.strategy.name if project.strategy else '—'}, объём: {project.volume}")

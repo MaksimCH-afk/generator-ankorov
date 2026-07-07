@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
-from .. import anchor_filter, appsettings
+from .. import anchor_filter, anchortypes, appsettings
 from ..database import get_db
 from ..excel_export import build_workbook, build_zip, safe_filename
 from ..helpers import project_progress, record_history
@@ -44,6 +44,7 @@ def generate_page(request: Request, db: Session = Depends(get_db), msg: str = ""
             "seo_specialists": SEO_SPECIALISTS,
             "ignore_count": ignore_count,
             "smart_semantic": bool(appsettings.get_slots(db)),
+            "has_key": bool(appsettings.get_any_slot(db)),
             "active": "generate",
             "msg": msg,
             "error": error,
@@ -91,11 +92,13 @@ async def generate(request: Request, db: Session = Depends(get_db)):
     grouped = form.get("group_mode") == "group"
     smart = form.get("smart_filter") == "on"
     include_language = form.get("include_language") == "on"  # default off (unchecked)
+    type_ai = form.get("type_ai") == "on"                    # refine anchor types via the key
     if not pids:
         return JSONResponse({"error": "Выберите хотя бы один проект."}, status_code=400)
 
     phrases = [a.phrase for a in db.query(IgnoreAnchor).all()] if smart else []
     slots = appsettings.get_slots(db) if smart else []
+    type_slot = appsettings.get_any_slot(db) if type_ai else None
 
     projects = db.query(Project).filter(Project.id.in_(pids)).all()
     files: dict[str, bytes] = {}
@@ -113,10 +116,14 @@ async def generate(request: Request, db: Session = Depends(get_db)):
         sheets = generate_project_sheets(db, project, exclude_keywords=exclude)
         if not sheets:
             continue
+        anchors = {r.anchor for rows in sheets.values() for r in rows}
+        type_map = anchortypes.build_type_map(
+            anchors, brand=project.brand or "",
+            keywords=[k.keyword for k in project.keywords], slot=type_slot)
         files[safe_filename(project.url)] = build_workbook(
             sheets, sprint=sprint, seo_specialist=seo_specialist,
             language=project.language or "", brand=project.brand or "",
-            keyword=project_top_keyword(project, exclude),
+            keyword=project_top_keyword(project, exclude), type_map=type_map,
             include_language=include_language, grouped=grouped)
         links = sum(r.link_qty for rows in sheets.values() for r in rows)
         results.append({"file": safe_filename(project.url), "links": links, "lang": project.language or "—"})

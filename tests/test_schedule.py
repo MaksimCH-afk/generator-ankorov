@@ -19,11 +19,13 @@ def test_day_capacities_spread_evenly():
 
 
 def test_classify():
-    assert S.classify("https://x.com/", "BD") == S.ANCHORLESS
-    assert S.classify("x.com", "") == S.ANCHORLESS
+    # naked URL -> always anchorless filler; bare domain / brand -> branded
+    assert S.classify("https://x.com/", "ND") == S.ANCHORLESS
+    assert S.classify("x.com", "") == S.BRANDED          # bare domain = BD -> branded
     assert S.classify("BrandName", "BD") == S.BRANDED
     assert S.classify("online casino österreich", "EM") == S.COMMERCIAL
     assert S.classify("casino per magenta", "PM") == S.COMMERCIAL
+    assert S.classify("Casino Vergleich von Brand", "BD+PM") == S.COMMERCIAL
 
 
 def _plan_book(rows):

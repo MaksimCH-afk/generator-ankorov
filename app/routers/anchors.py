@@ -5,13 +5,22 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from .. import appsettings
+from .. import anchortypes, appsettings
 from ..database import get_db
 from ..logging_util import log_event
 from ..models import IgnoreAnchor
 from ..templating import templates
 
 router = APIRouter()
+
+
+@router.get("/anchor-types", response_class=HTMLResponse)
+def anchor_types_page(request: Request):
+    """Reference guide: the company's 7-type anchor classification."""
+    return templates.TemplateResponse(
+        "anchor_types.html",
+        {"request": request, "reference": anchortypes.REFERENCE, "active": "anchor-types"},
+    )
 
 
 @router.get("/anchors", response_class=HTMLResponse)
