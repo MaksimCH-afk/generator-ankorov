@@ -113,16 +113,18 @@ def day_capacities(total: int, days: int) -> list[int]:
 
 
 def order_links(links: list[dict]) -> list[dict]:
-    """Interleave links so each category is spread evenly across the sequence
-    (fractional-rank merge). Money anchors get placed before filler on ties."""
+    """Interleave links so that **each distinct anchor** is spread evenly across
+    the whole sequence (fractional-rank merge per anchor text), not grouped one
+    anchor after another. Category priority only breaks ties at equal rank."""
     groups: dict[str, list[dict]] = defaultdict(list)
     for l in links:
-        groups[l["category"]].append(l)
+        groups[l["anchor"]].append(l)  # group by distinct anchor text
     ranked = []
-    for cat, items in groups.items():
+    for _anchor, items in groups.items():
         n = len(items)
+        prio = _PRIORITY.get(items[0]["category"], 3)
         for i, it in enumerate(items):
-            ranked.append(((i + 0.5) / n, _PRIORITY.get(cat, 3), it))
+            ranked.append(((i + 0.5) / n, prio, it))
     ranked.sort(key=lambda x: (x[0], x[1]))
     return [it for _, _, it in ranked]
 

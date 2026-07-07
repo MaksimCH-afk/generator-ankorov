@@ -85,6 +85,23 @@ def test_classify_buckets_two_tier(monkeypatch):
     assert "online casino" not in cheap_call[1]
 
 
+def test_each_anchor_spread_not_grouped():
+    # three distinct commercial anchors, grouped in the input (all A, then B, then C)
+    rows = []
+    for anchor in ("a casino", "b casino", "c casino"):
+        for _ in range(10):
+            rows.append(["1 S", "M", "x.com", "https://x.com/", "Main Page", "BH", "EM", anchor, anchor])
+    header, links = S.read_plan(_plan_book(rows))
+    placements = S.distribute(links, 10, datetime.date(2026, 7, 9))
+    from collections import defaultdict
+    span = defaultdict(list)
+    for d, l in placements:
+        span[l["anchor"]].append((d - datetime.date(2026, 7, 9)).days)
+    # each anchor must be spread across the whole window, not clustered at one end
+    for anchor, days in span.items():
+        assert min(days) <= 1 and max(days) >= 8, (anchor, days)
+
+
 def test_build_scheduled_workbook_replaces_sprint_with_date():
     rows = [["1 S", "Miles", "x.com", "https://x.com/", "Main Page", "BH", "BD",
              "https://x.com/", "x"] for _ in range(10)]
