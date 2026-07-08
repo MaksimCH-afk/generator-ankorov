@@ -85,8 +85,9 @@
             <div class="modal-sub" id="modal-sub"></div>
         </div>
         <div class="modal-body" id="modal-files"></div>
-        <div class="modal-foot">
-            <a class="btn" id="modal-download" style="flex:1" href="#">⬇ Скачать <span id="modal-dl-label"></span></a>
+        <div class="modal-foot" style="flex-wrap:wrap">
+            <a class="btn" id="modal-download" style="flex:1;min-width:160px" href="#">⬇ Скачать <span id="modal-dl-label"></span></a>
+            <a class="btn btn-soft" id="modal-schedule" style="flex:1;min-width:200px" href="#">🗓 В распределение по датам</a>
             <button type="button" class="btn-sec" onclick="document.getElementById('gen-modal').classList.remove('open')">Закрыть</button>
         </div>
     </div>
@@ -170,6 +171,7 @@ function runGenerate(){
             });
             document.getElementById('modal-dl-label').textContent=d.download_label;
             document.getElementById('modal-download').href='/generate/download/'+d.token;
+            document.getElementById('modal-schedule').href='/schedule?src='+d.token;
             document.getElementById('gen-modal').classList.add('open');
         })
         .catch(()=>{ btn.disabled=false; btn.style.opacity=''; alert('Ошибка генерации.'); });

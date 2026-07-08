@@ -16,10 +16,23 @@
         на <span class="mono">Date</span>.
     </p>
     <form method="post" action="/schedule/generate" enctype="multipart/form-data">
+        {% if src_files %}
+        <input type="hidden" name="src_token" value="{{ src_token }}">
+        <div class="card" style="background:#7C3AED0D;border-color:#7C3AED33;margin-bottom:14px">
+            <div class="card-title" style="font-size:14px">🗓 Из генерации — выберите проекты</div>
+            <p class="help-text" style="margin-top:0">Файлы только что сгенерированы — распределяются напрямую, без выгрузки и загрузки. Отметьте нужные (можно часть).</p>
+            {% for f in src_files %}
+            <label class="toggle-row" style="margin-top:4px">
+                <input type="checkbox" name="src_files" value="{{ f }}" checked>
+                <span class="mono" style="font-size:12.5px">{{ f }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        {% endif %}
         <div class="grid grid-3">
             <div class="field">
-                <label>Файлы планов (.xlsx) — можно несколько</label>
-                <input type="file" id="sch-files" name="files" accept=".xlsx,.xlsm" multiple required>
+                <label>Файлы планов (.xlsx){% if not src_files %} — можно несколько{% endif %}</label>
+                <input type="file" id="sch-files" name="files" accept=".xlsx,.xlsm" multiple {{ '' if src_files else 'required' }}>
             </div>
             <div class="field">
                 <label>Период, дней <span id="days-hint" class="muted-2" style="text-transform:none;font-weight:500"></span></label>

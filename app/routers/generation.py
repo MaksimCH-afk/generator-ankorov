@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
-from .. import anchortypes, appsettings
+from .. import anchortypes, appsettings, genstore
 from ..database import get_db
 from ..excel_export import build_workbook, build_zip, safe_filename
 from ..helpers import project_progress, record_history
@@ -145,6 +145,9 @@ async def generate(request: Request, db: Session = Depends(get_db)):
     if len(_GENERATED) > 20:
         for k in list(_GENERATED)[:-20]:
             _GENERATED.pop(k, None)
+    # Keep the per-project files so the Date-distribution tab can pull them
+    # directly (skip download + re-upload).
+    genstore.save_run(token, files)
 
     return JSONResponse({
         "token": token,
