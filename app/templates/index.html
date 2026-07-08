@@ -13,6 +13,12 @@
     <button type="button" class="btn-sec" onclick="togglePanel('settings-panel')">⚙ Настройки
         {% if key_present %}<span class="badge green" style="margin-left:4px">ключ ✓</span>{% else %}<span class="badge gray" style="margin-left:4px">без ключа</span>{% endif %}
     </button>
+    {% if project_views %}
+    <form method="post" action="/projects/reclassify-all" style="display:inline"
+          onsubmit="return confirm('Перераспознать ключи во всех проектах? Может занять время.')">
+        <button type="submit" class="btn-sec">↺ Актуализировать все</button>
+    </form>
+    {% endif %}
     <div style="flex:1"></div>
     <input id="proj-search" placeholder="Поиск по домену…" style="width:240px" oninput="filterProjects(this.value)">
 </div>
