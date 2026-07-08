@@ -35,16 +35,28 @@
 <div class="card">
     <div class="block-head"><span class="dot {{ 'done' if progress.has_keywords }}">{{ '✓' if progress.has_keywords else '1' }}</span><div class="card-title" style="margin:0">Частотка ({{ keywords|length }} ключей)</div></div>
     <div class="spacer"></div>
-    <form method="post" action="/projects/{{ project.id }}/keywords" enctype="multipart/form-data" class="inline">
-        <input type="file" name="file" accept=".csv,.xlsx,.xlsm">
-        <button class="narrow" type="submit">Загрузить</button>
-    </form>
-    <p class="help-text">Файл с колонками <span class="mono">keyword | frequency</span>. Загрузка заменяет текущую частотку.</p>
+    <div class="row-actions">
+        <form method="post" action="/projects/{{ project.id }}/keywords" enctype="multipart/form-data" class="inline">
+            <input type="file" name="file" accept=".csv,.xlsx,.xlsm">
+            <button class="narrow" type="submit">Загрузить</button>
+        </form>
+        {% if keywords %}
+        <form method="post" action="/projects/{{ project.id }}/classify" style="display:inline">
+            <button class="btn-sec btn-sm" type="submit" title="Перераспознать типы и стоп-анкоры нейросетью">↺ Распознать заново</button>
+        </form>
+        {% endif %}
+    </div>
+    <p class="help-text">Файл с колонками <span class="mono">keyword | frequency</span>. Загрузка заменяет текущую частотку. При загрузке ключи распознаются (тип анкора + стоп-анкоры) — нейросетью, если подключён ключ OpenRouter.</p>
     {% if keywords %}
     <div class="table-wrap" style="margin-top:12px;border:1px solid var(--line);border-radius:11px">
     <table>
-        <thead><tr><th>#</th><th>Ключ</th><th class="num">Частотность</th></tr></thead>
-        <tbody>{% for k in keywords %}<tr><td>{{ loop.index }}</td><td>{{ k.keyword }}</td><td class="num">{{ k.frequency }}</td></tr>{% endfor %}</tbody>
+        <thead><tr><th>#</th><th>Ключ</th><th>Тип</th><th class="num">Частотность</th></tr></thead>
+        <tbody>{% for k in keywords %}<tr{% if k.excluded %} style="opacity:.5"{% endif %}>
+            <td>{{ loop.index }}</td>
+            <td>{{ k.keyword }}{% if k.excluded %} <span class="badge gray" title="Исключён как стоп-анкор">стоп-анкор</span>{% endif %}</td>
+            <td>{% if k.anchor_type %}<span class="mono" style="color:var(--accent-2)">{{ k.anchor_type }}</span>{% endif %}</td>
+            <td class="num">{{ k.frequency }}</td>
+        </tr>{% endfor %}</tbody>
     </table>
     </div>
     {% endif %}

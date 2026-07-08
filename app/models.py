@@ -165,6 +165,9 @@ class Keyword(Base):
     keyword = Column(String, nullable=False)
     frequency = Column(Float, nullable=False, default=0.0)
     position = Column(Integer, nullable=False, default=0)  # original file order (tie-break, §4.4)
+    # Recognition results computed at upload (kept so generation stays fast/offline):
+    excluded = Column(Boolean, nullable=False, default=False)     # matches a stop-anchor
+    anchor_type = Column(String, nullable=False, default="")      # company 7-type (ND/BD/EM/PM/G/BD+PM/NT)
 
     project = relationship("Project", back_populates="keywords")
 

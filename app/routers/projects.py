@@ -15,7 +15,8 @@ from ..helpers import match_project, project_progress, project_view, record_hist
 from ..logging_util import log_event
 from ..models import ARTICLE_LANGUAGES, Keyword, Project, Strategy
 from ..parsing import normalize_domain, parse_frequency, parse_project_sheets, parse_project_table
-from ..service import generate_project_sheets, project_top_keyword, strategy_label
+from ..service import (classify_project_keywords, generate_project_sheets,
+                       project_top_keyword, strategy_label)
 from ..templating import templates
 
 router = APIRouter()
@@ -278,6 +279,21 @@ async def bulk_strategy(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(f"/?msg=Стратегия назначена {len(ids)} проектам", status_code=303)
 
 
+@router.post("/projects/{pid}/classify")
+def reclassify_keywords(pid: int, db: Session = Depends(get_db)):
+    """Re-run keyword recognition (neural if a key is connected) — e.g. after
+    editing stop-anchors or adding a key."""
+    project = db.get(Project, pid)
+    if not project:
+        raise HTTPException(404, "Проект не найден")
+    info = classify_project_keywords(db, project, use_llm=True)
+    log_event(db, "INFO", "project", f"Переклассификация ключей {project.url}",
+              f"распознавание: {info['mode']}, исключено: {info['excluded']}")
+    return RedirectResponse(
+        f"/projects/{pid}?msg=Распознано заново ({info['mode']}), исключено стоп-анкоров: {info['excluded']}.",
+        status_code=303)
+
+
 @router.post("/projects/{pid}/keywords")
 async def upload_keywords(pid: int, db: Session = Depends(get_db), file: UploadFile = None):
     project = db.get(Project, pid)
@@ -297,9 +313,14 @@ async def upload_keywords(pid: int, db: Session = Depends(get_db), file: UploadF
     for i, (keyword, freq) in enumerate(pairs):
         db.add(Keyword(project_id=pid, keyword=keyword, frequency=freq, position=i))
     db.commit()
+    # Recognise keywords now (neural if a key is connected) so generation is fast.
+    info = classify_project_keywords(db, project, use_llm=True)
     log_event(db, "INFO", "upload", f"Загружена частотка для {project.url}",
-              f"Файл: {file.filename}, ключей: {len(pairs)}")
-    return RedirectResponse(f"/projects/{pid}?msg=Загружено ключей: {len(pairs)}.", status_code=303)
+              f"Файл: {file.filename}, ключей: {len(pairs)}; "
+              f"распознавание: {info['mode']}, исключено стоп-анкоров: {info['excluded']}")
+    return RedirectResponse(
+        f"/projects/{pid}?msg=Загружено ключей: {len(pairs)}. "
+        f"Распознано ({info['mode']}), исключено стоп-анкоров: {info['excluded']}.", status_code=303)
 
 
 @router.post("/projects/batch-keywords")
@@ -324,6 +345,9 @@ async def batch_keywords(request: Request, db: Session = Depends(get_db)):
         for i, (keyword, freq) in enumerate(pairs):
             db.add(Keyword(project_id=target.id, keyword=keyword, frequency=freq, position=i))
         db.commit()
+        # Bulk import may create many projects — recognise deterministically (fast,
+        # no network). Neural refinement is available per project via "Распознать заново".
+        classify_project_keywords(db, target, use_llm=False)
 
     for upload in files:
         content = await upload.read()
