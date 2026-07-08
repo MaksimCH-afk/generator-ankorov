@@ -45,38 +45,10 @@
 </div>
 
 <div class="card" style="margin-top:18px">
-    <div class="card-title">Ключи OpenRouter (для шуток про SEO)</div>
-    <p class="help-text" style="margin-top:0;margin-bottom:16px">
-        Два слота с разными моделями — шутки чередуются между ними, чтобы реже ловить таймауты и лимиты.
-        Впишите ключ и <b>точный id модели из OpenRouter</b> (например <span class="mono">openai/gpt-4o-mini</span>,
-        <span class="mono">nvidia/nemotron-…</span>), затем «Сохранить». Ключ хранится локально и не показывается целиком.
+    <p class="help-text" style="margin:0">
+        Ключ OpenRouter и выбор модели для каждого действия теперь в разделе
+        <a href="/">«Проекты» → «Настройки»</a> (вверху страницы).
     </p>
-    {% for slot in [1, 2] %}
-    <form method="post" action="/settings/openrouter-key" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--line)">
-        <input type="hidden" name="slot" value="{{ slot }}">
-        <div style="margin-bottom:8px">
-            <b>Слот {{ slot }}</b>
-            {% if key_status[slot] %}<span class="badge green" style="margin-left:6px">ключ сохранён {{ key_masked[slot] }}</span>
-            {% else %}<span class="badge gray" style="margin-left:6px">ключ не задан</span>{% endif %}
-        </div>
-        <div class="inline">
-            <div style="flex:1;min-width:240px">
-                <label>API-ключ</label>
-                <input type="text" name="key" placeholder="sk-or-v1-…  (пусто = не менять)" autocomplete="off">
-            </div>
-            <div style="flex:1;min-width:220px">
-                <label>Модель (id из OpenRouter)</label>
-                <input type="text" name="model" class="mono" value="{{ key_models[slot] }}" placeholder="openai/gpt-4o-mini">
-            </div>
-            <button class="narrow" type="submit" name="action" value="save">Сохранить</button>
-            {% if key_status[slot] %}<button class="btn-danger btn-sm narrow" type="submit" name="action" value="clear">Очистить ключ</button>{% endif %}
-        </div>
-    </form>
-    {% endfor %}
-    <div class="spacer"></div>
-    <form method="post" action="/settings/openrouter-check" style="display:inline">
-        <button type="submit">Проверить ключи</button>
-    </form>
 </div>
 {% endblock %}
 

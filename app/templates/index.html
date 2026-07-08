@@ -10,8 +10,54 @@
         Импорт из Excel
     </button>
     <button type="button" class="btn-sec" onclick="togglePanel('create-panel')">＋ Проект</button>
+    <button type="button" class="btn-sec" onclick="togglePanel('settings-panel')">⚙ Настройки
+        {% if key_present %}<span class="badge green" style="margin-left:4px">ключ ✓</span>{% else %}<span class="badge gray" style="margin-left:4px">без ключа</span>{% endif %}
+    </button>
     <div style="flex:1"></div>
     <input id="proj-search" placeholder="Поиск по домену…" style="width:240px" oninput="filterProjects(this.value)">
+</div>
+
+<div class="card" id="settings-panel" style="display:none">
+    <div class="card-title">Настройки — ключ OpenRouter и модели</div>
+    <p class="help-text" style="margin-top:0;margin-bottom:14px">
+        Задаётся один раз, до импорта и генерации. Один ключ OpenRouter на всё; для каждого действия —
+        своя модель. Ключ хранится локально и не показывается целиком. Кнопка «Проставить рекомендуемые»
+        подставит подобранные модели (можно поменять на свои).
+    </p>
+    <form method="post" action="/settings/save" id="settings-form">
+        <div class="field" style="max-width:520px">
+            <label>API-ключ OpenRouter
+                {% if key_present %}<span class="badge green" style="margin-left:6px">сохранён {{ key_masked }}</span>
+                {% else %}<span class="badge gray" style="margin-left:6px">не задан</span>{% endif %}
+            </label>
+            <input type="text" name="key" placeholder="sk-or-v1-…  (пусто = не менять)" autocomplete="off">
+        </div>
+        <div class="spacer"></div>
+        <div class="grid grid-2">
+            {% for a in settings_actions %}
+            <div class="field">
+                <label>{{ settings_labels[a] }}
+                    <span class="muted-2" style="text-transform:none;font-weight:500">· рек.: <span class="mono">{{ settings_recommended[a] }}</span></span>
+                </label>
+                <input type="text" class="mono setting-model" data-recommended="{{ settings_recommended[a] }}"
+                       name="model_{{ a }}" value="{{ settings_models[a] }}" placeholder="{{ settings_recommended[a] }}">
+            </div>
+            {% endfor %}
+        </div>
+        <div class="spacer"></div>
+        <div class="row-actions">
+            <button type="submit">Сохранить</button>
+            <button type="button" class="btn-sec" onclick="applyRecommended()">Проставить рекомендуемые</button>
+            {% if key_present %}
+            <button type="submit" class="btn-danger btn-sm" name="action" value="clear_key"
+                    onclick="return confirm('Очистить сохранённый ключ?')">Очистить ключ</button>
+            {% endif %}
+        </div>
+    </form>
+    <div class="spacer"></div>
+    <form method="post" action="/settings/check" style="display:inline">
+        <button class="btn-sec btn-sm" type="submit">Проверить ключ</button>
+    </form>
 </div>
 
 <div class="card" id="import-panel" style="display:none">
@@ -124,6 +170,7 @@
 {% block scripts %}
 <script>
 function togglePanel(id){ const e=document.getElementById(id); e.style.display = e.style.display==='none' ? 'block' : 'none'; }
+function applyRecommended(){ document.querySelectorAll('.setting-model').forEach(function(i){ i.value = i.dataset.recommended || ''; }); }
 function filterProjects(q){
     q=(q||'').toLowerCase();
     document.querySelectorAll('#proj-list .item-card').forEach(c=>{

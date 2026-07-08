@@ -5,16 +5,13 @@ from __future__ import annotations
 import datetime
 import os
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
-
-from fastapi import HTTPException
 
 from .. import appsettings, scheduling
 from ..database import get_db
 from ..excel_export import build_zip
-from ..jokes import check_key
 from ..logging_util import log_event
 from ..models import ScheduleRun
 from ..templating import templates
@@ -27,8 +24,6 @@ _HISTORY_LIMIT = 50
 
 @router.get("/schedule", response_class=HTMLResponse)
 def schedule_page(request: Request, db: Session = Depends(get_db), msg: str = "", error: str = ""):
-    key = appsettings.get_setting(db, "or_key_schedule", "").strip()
-    masked = ("…" + key[-4:]) if len(key) >= 4 else ("задан" if key else "")
     history = db.query(ScheduleRun).order_by(ScheduleRun.created_at.desc(), ScheduleRun.id.desc()).limit(50).all()
     return templates.TemplateResponse(
         "schedule.html",
@@ -36,11 +31,9 @@ def schedule_page(request: Request, db: Session = Depends(get_db), msg: str = ""
             "request": request,
             "active": "schedule",
             "today": datetime.date.today().isoformat(),
-            "key_saved": bool(key),
-            "key_masked": masked,
             "key_model": appsettings.get_schedule_model(db),
             "key_model_cheap": appsettings.get_schedule_cheap_model(db),
-            "has_any_key": appsettings.get_schedule_slot(db) is not None,
+            "has_any_key": appsettings.has_key(db),
             "history": history,
             "msg": msg,
             "error": error,
@@ -186,31 +179,3 @@ def clear_history(db: Session = Depends(get_db)):
     db.query(ScheduleRun).delete()
     db.commit()
     return RedirectResponse("/schedule?msg=История распределений очищена", status_code=303)
-
-
-@router.post("/schedule/key")
-def save_schedule_key(db: Session = Depends(get_db), key: str = Form(""),
-                      model: str = Form(""), model_cheap: str = Form(""), action: str = Form("save")):
-    appsettings.set_setting(db, "or_model_schedule", (model or "").strip())
-    appsettings.set_setting(db, "or_model_schedule_cheap", (model_cheap or "").strip())
-    if action == "clear":
-        appsettings.set_setting(db, "or_key_schedule", "")
-        log_event(db, "INFO", "settings", "Ключ распределения по датам очищен")
-        return RedirectResponse("/schedule?msg=Ключ очищен", status_code=303)
-    value = (key or "").strip()
-    if value:
-        appsettings.set_setting(db, "or_key_schedule", value)
-        log_event(db, "INFO", "settings", "Ключ распределения по датам сохранён", f"{value[:8]}…")
-        return RedirectResponse("/schedule?msg=Ключ сохранён", status_code=303)
-    return RedirectResponse("/schedule?msg=Модель сохранена", status_code=303)
-
-
-@router.post("/schedule/check")
-def check_schedule_key(db: Session = Depends(get_db)):
-    slot = appsettings.get_schedule_slot(db)
-    if not slot:
-        return RedirectResponse("/schedule?msg=Ключ не задан (можно и без него — тогда по типам анкоров).",
-                                status_code=303)
-    ok, detail = check_key(slot[0])
-    return RedirectResponse(f"/schedule?msg=Проверка ключа: {'✓ ' + detail if ok else '✗ ' + detail}",
-                            status_code=303)

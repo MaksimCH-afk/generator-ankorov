@@ -183,12 +183,12 @@ def classify_project_keywords(db: Session, project: Project, use_llm: bool = Tru
     if not keywords:
         return {"total": 0, "excluded": 0, "mode": "none"}
     phrases = [a.phrase for a in db.query(IgnoreAnchor).all()]
-    slot = appsettings.get_any_slot(db) if use_llm else None
-    slots = [slot] if slot else []
+    smart_slot = appsettings.get_action_slot(db, "smart") if use_llm else None
+    types_slot = appsettings.get_action_slot(db, "types") if use_llm else None
 
-    _, removed, mode = anchor_filter.filter_keywords(keywords, phrases, slots)
+    _, removed, mode = anchor_filter.filter_keywords(keywords, phrases, [smart_slot] if smart_slot else [])
     type_map = anchortypes.build_type_map(keywords, brand=project.brand or "",
-                                          keywords=keywords, slot=slot)
+                                          keywords=keywords, slot=types_slot)
     for k in project.keywords:
         k.excluded = k.keyword in removed
         k.anchor_type = type_map.get(k.keyword, "")

@@ -8,8 +8,9 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
-from .. import anchortypes
+from .. import anchortypes, appsettings
 from ..database import get_db
+from ..jokes import check_key
 from ..excel_export import build_workbook, safe_filename
 from ..helpers import match_project, project_progress, project_view, record_history
 from ..logging_util import log_event
@@ -34,11 +35,45 @@ def dashboard(request: Request, db: Session = Depends(get_db), msg: str = "", er
             "strategies": db.query(Strategy).order_by(Strategy.id).all(),
             "strategy_options": [{"id": s.id, "label": strategy_label(s)} for s in db.query(Strategy).all()],
             "article_languages": ARTICLE_LANGUAGES,
+            # Settings block: one OpenRouter key + a model per action.
+            "settings_actions": appsettings.ACTIONS,
+            "settings_labels": appsettings.ACTION_LABELS,
+            "settings_models": appsettings.get_models(db),
+            "settings_recommended": appsettings.RECOMMENDED,
+            "key_present": appsettings.has_key(db),
+            "key_masked": appsettings.masked_key(db),
             "active": "dashboard",
             "msg": msg,
             "error": error,
         },
     )
+
+
+@router.post("/settings/save")
+async def save_settings(request: Request, db: Session = Depends(get_db)):
+    """Save the unified OpenRouter key (optional) and the model for each action."""
+    form = await request.form()
+    key = (form.get("key") or "").strip()
+    if form.get("action") == "clear_key":
+        appsettings.set_key(db, "")
+        log_event(db, "INFO", "settings", "OpenRouter ключ очищен")
+        return RedirectResponse("/?msg=Ключ очищен", status_code=303)
+    if key:
+        appsettings.set_key(db, key)
+    for a in appsettings.ACTIONS:
+        appsettings.set_action_model(db, a, (form.get(f"model_{a}") or "").strip())
+    log_event(db, "INFO", "settings", "Сохранены настройки моделей OpenRouter",
+              ", ".join(f"{a}={appsettings.get_action_model(db, a)}" for a in appsettings.ACTIONS))
+    return RedirectResponse("/?msg=Настройки сохранены", status_code=303)
+
+
+@router.post("/settings/check")
+def check_settings_key(db: Session = Depends(get_db)):
+    key = appsettings.get_key(db)
+    if not key:
+        return RedirectResponse("/?msg=Ключ не задан.", status_code=303)
+    ok, detail = check_key(key)
+    return RedirectResponse(f"/?msg=Проверка ключа: {'✓ ' + detail if ok else '✗ ' + detail}", status_code=303)
 
 
 @router.get("/projects/{pid}", response_class=HTMLResponse)
