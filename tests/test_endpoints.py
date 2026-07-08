@@ -78,6 +78,39 @@ def test_export_and_breakdown():
         assert e.status_code == 200 and "spreadsheet" in e.headers["content-type"]
 
 
+def test_delete_removes_from_generation():
+    with TestClient(app) as c:
+        c.post("/projects/create", data={"url": "https://del.com/", "brand": "del"}, follow_redirects=False)
+        pid = _project_id("https://del.com/")
+        assert "https://del.com/" in c.get("/generate").text
+        c.post(f"/projects/{pid}/delete", follow_redirects=False)
+        assert "https://del.com/" not in c.get("/generate").text     # gone from generation too
+        assert SessionLocal().get(Project, pid) is None
+
+
+def test_reclassify_all_updates_stored_recognition():
+    from app.models import Keyword
+    with TestClient(app) as c:
+        c.post("/projects/create", data={"url": "https://ract.com/", "brand": "ract"}, follow_redirects=False)
+        pid = _project_id("https://ract.com/")
+        # insert keywords directly WITHOUT recognition (simulates a pre-feature project)
+        db = SessionLocal()
+        for i, kw in enumerate(["ract casino", "ract no deposit bonus"]):
+            db.add(Keyword(project_id=pid, keyword=kw, frequency=100 - i, position=i))
+        db.commit(); db.close()
+        # nothing recognised yet
+        db = SessionLocal()
+        assert all(not k.excluded and not k.anchor_type
+                   for k in db.query(Keyword).filter_by(project_id=pid).all())
+        db.close()
+        c.post("/projects/reclassify-all", follow_redirects=False)
+        db = SessionLocal()
+        kws = {k.keyword: k for k in db.query(Keyword).filter_by(project_id=pid).all()}
+        assert kws["ract no deposit bonus"].excluded is True   # stop-anchor now flagged
+        assert all(k.anchor_type for k in kws.values())         # types now filled
+        db.close()
+
+
 def test_settings_key_and_per_action_models():
     from app import appsettings
     from app.database import SessionLocal

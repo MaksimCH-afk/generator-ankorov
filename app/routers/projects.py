@@ -316,6 +316,24 @@ async def bulk_strategy(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(f"/?msg=Стратегия назначена {len(ids)} проектам", status_code=303)
 
 
+@router.post("/projects/reclassify-all")
+def reclassify_all(db: Session = Depends(get_db)):
+    """Re-run keyword recognition on every project — brings older projects
+    (imported before recognition existed) up to date."""
+    projects = db.query(Project).all()
+    done, total_excluded = 0, 0
+    for p in projects:
+        if p.keywords:
+            info = classify_project_keywords(db, p, use_llm=True)
+            total_excluded += info["excluded"]
+            done += 1
+    log_event(db, "INFO", "project", f"Актуализированы проекты ({done})",
+              f"исключено стоп-анкоров всего: {total_excluded}")
+    return RedirectResponse(
+        f"/?msg=Актуализировано проектов: {done}, исключено стоп-анкоров: {total_excluded}.",
+        status_code=303)
+
+
 @router.post("/projects/{pid}/classify")
 def reclassify_keywords(pid: int, db: Session = Depends(get_db)):
     """Re-run keyword recognition (neural if a key is connected) — e.g. after
