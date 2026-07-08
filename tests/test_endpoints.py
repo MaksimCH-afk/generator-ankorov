@@ -123,9 +123,10 @@ def test_upload_classifies_and_generation_excludes_stopanchors():
         sid = SessionLocal().query(Strategy).first().id
         c.post(f"/projects/{pid}/strategy", data={"strategy_id": sid}, follow_redirects=False)
         c.post(f"/projects/{pid}/volume", data={"volume": 100}, follow_redirects=False)
-        # generation with smart on drops the excluded keyword; runs offline
-        r = c.post("/generate", data={"project_ids": [pid], "export_format": "separate",
-                                      "group_mode": "group", "smart_filter": "on"})
+        # export params live in Settings now: enable stop-anchor exclusion + grouping
+        c.post("/settings/save", data={"gen_smart": "on", "gen_group": "group"}, follow_redirects=False)
+        # generation drops the excluded keyword; runs offline
+        r = c.post("/generate", data={"project_ids": [pid]})
         assert r.status_code == 200
         d = c.get(f"/generate/download/{r.json()['token']}")
         anchors = _anchor_column(d.content)

@@ -13,7 +13,7 @@ from ..database import get_db
 from ..excel_export import build_workbook, build_zip, safe_filename
 from ..helpers import project_progress, record_history
 from ..logging_util import log_event
-from ..models import ARTICLE_LANGUAGES, SEO_SPECIALISTS, IgnoreAnchor, Project, Strategy
+from ..models import ARTICLE_LANGUAGES, IgnoreAnchor, Project, Strategy
 from ..service import (generate_project_sheets, project_breakdown, project_top_keyword,
                        strategy_label, strategy_segments)
 from ..templating import templates
@@ -41,10 +41,8 @@ def generate_page(request: Request, db: Session = Depends(get_db), msg: str = ""
             "gen_views": gen_views,
             "strategy_options": [{"id": s.id, "label": strategy_label(s)} for s in strategies],
             "article_languages": ARTICLE_LANGUAGES,
-            "seo_specialists": SEO_SPECIALISTS,
             "ignore_count": ignore_count,
-            "smart_semantic": bool(appsettings.get_slots(db)),
-            "has_key": bool(appsettings.get_any_slot(db)),
+            "gen_settings": appsettings.get_gen_settings(db),
             "active": "generate",
             "msg": msg,
             "error": error,
@@ -86,14 +84,16 @@ def preview(pid: int, request: Request, db: Session = Depends(get_db)):
 async def generate(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     pids = [int(x) for x in form.getlist("project_ids")]
-    export_format = form.get("export_format", "separate")
-    sprint = (form.get("sprint") or "").strip()
-    seo_specialist = (form.get("seo_specialist") or "").strip()
-    grouped = form.get("group_mode") == "group"
-    smart = form.get("smart_filter") == "on"
-    include_language = form.get("include_language") == "on"  # default off (unchecked)
     if not pids:
         return JSONResponse({"error": "Выберите хотя бы один проект."}, status_code=400)
+    # All export params come from the global Settings (Projects page).
+    gs = appsettings.get_gen_settings(db)
+    export_format = gs["format"]
+    sprint = gs["sprint"]
+    seo_specialist = gs["seo"]
+    grouped = gs["group"] == "group"
+    smart = gs["smart"]
+    include_language = gs["include_language"]
 
     projects = db.query(Project).filter(Project.id.in_(pids)).all()
     files: dict[str, bytes] = {}

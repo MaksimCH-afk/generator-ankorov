@@ -14,7 +14,7 @@ from ..jokes import check_key
 from ..excel_export import build_workbook, safe_filename
 from ..helpers import match_project, project_progress, project_view, record_history
 from ..logging_util import log_event
-from ..models import ARTICLE_LANGUAGES, Keyword, Project, Strategy
+from ..models import ARTICLE_LANGUAGES, SEO_SPECIALISTS, Keyword, Project, Strategy
 from ..parsing import normalize_domain, parse_frequency, parse_project_sheets, parse_project_table
 from ..service import (classify_project_keywords, generate_project_sheets,
                        project_top_keyword, strategy_label)
@@ -42,6 +42,8 @@ def dashboard(request: Request, db: Session = Depends(get_db), msg: str = "", er
             "settings_recommended": appsettings.RECOMMENDED,
             "key_present": appsettings.has_key(db),
             "key_masked": appsettings.masked_key(db),
+            "gen_settings": appsettings.get_gen_settings(db),
+            "seo_specialists": SEO_SPECIALISTS,
             "active": "dashboard",
             "msg": msg,
             "error": error,
@@ -62,8 +64,8 @@ async def save_settings(request: Request, db: Session = Depends(get_db)):
         appsettings.set_key(db, key)
     for a in appsettings.ACTIONS:
         appsettings.set_action_model(db, a, (form.get(f"model_{a}") or "").strip())
-    log_event(db, "INFO", "settings", "Сохранены настройки моделей OpenRouter",
-              ", ".join(f"{a}={appsettings.get_action_model(db, a)}" for a in appsettings.ACTIONS))
+    appsettings.save_gen_settings(db, form)
+    log_event(db, "INFO", "settings", "Сохранены настройки моделей и параметры выгрузки")
     return RedirectResponse("/?msg=Настройки сохранены", status_code=303)
 
 
