@@ -85,6 +85,11 @@ def _migrate_schema() -> None:
         strat_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(strategies)"))}
         if strat_cols and "anchorless_profile_id" not in strat_cols:
             conn.execute(text("ALTER TABLE strategies ADD COLUMN anchorless_profile_id INTEGER"))
+        kw_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(keywords)"))}
+        if kw_cols and "excluded" not in kw_cols:
+            conn.execute(text("ALTER TABLE keywords ADD COLUMN excluded BOOLEAN NOT NULL DEFAULT 0"))
+        if kw_cols and "anchor_type" not in kw_cols:
+            conn.execute(text("ALTER TABLE keywords ADD COLUMN anchor_type VARCHAR NOT NULL DEFAULT ''"))
         # Drop stale joke-model overrides so existing DBs pick up the new defaults.
         app_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(app_settings)"))}
         if app_cols:

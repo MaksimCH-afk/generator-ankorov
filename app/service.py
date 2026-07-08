@@ -5,8 +5,8 @@ import json
 
 from sqlalchemy.orm import Session
 
-from . import generator as gen
-from .models import AnchorlessProfile, InternalPageSuffix, Project, Strategy
+from . import anchor_filter, anchortypes, appsettings, generator as gen
+from .models import AnchorlessProfile, IgnoreAnchor, InternalPageSuffix, Project, Strategy
 
 
 def strategy_to_gen(strategy: Strategy) -> gen.Strategy:
@@ -168,6 +168,32 @@ def is_crowd_strategy(strategy: Strategy) -> bool:
     """A campaign of type "крауд + сабмиты" = strategy with no anchor roles
     (everything is anchorless)."""
     return not json.loads(strategy.roles_json or "[]")
+
+
+def classify_project_keywords(db: Session, project: Project, use_llm: bool = True) -> dict:
+    """Recognise a project's keywords at upload time (kept so generation stays
+    fast and offline): mark stop-anchor matches as ``excluded`` and store each
+    keyword's company anchor type.
+
+    ``use_llm`` uses the connected OpenRouter key (semantic match + rubric
+    typing) when available; otherwise everything is deterministic (substring
+    match + rule-based types). Returns a small summary dict.
+    """
+    keywords = [k.keyword for k in project.keywords]
+    if not keywords:
+        return {"total": 0, "excluded": 0, "mode": "none"}
+    phrases = [a.phrase for a in db.query(IgnoreAnchor).all()]
+    slot = appsettings.get_any_slot(db) if use_llm else None
+    slots = [slot] if slot else []
+
+    _, removed, mode = anchor_filter.filter_keywords(keywords, phrases, slots)
+    type_map = anchortypes.build_type_map(keywords, brand=project.brand or "",
+                                          keywords=keywords, slot=slot)
+    for k in project.keywords:
+        k.excluded = k.keyword in removed
+        k.anchor_type = type_map.get(k.keyword, "")
+    db.commit()
+    return {"total": len(keywords), "excluded": len(removed), "mode": mode}
 
 
 def project_top_keyword(project: Project, exclude: set[str] | None = None) -> str:

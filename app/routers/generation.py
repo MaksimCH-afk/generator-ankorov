@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
-from .. import anchor_filter, anchortypes, appsettings
+from .. import anchortypes, appsettings
 from ..database import get_db
 from ..excel_export import build_workbook, build_zip, safe_filename
 from ..helpers import project_progress, record_history
@@ -92,34 +92,29 @@ async def generate(request: Request, db: Session = Depends(get_db)):
     grouped = form.get("group_mode") == "group"
     smart = form.get("smart_filter") == "on"
     include_language = form.get("include_language") == "on"  # default off (unchecked)
-    type_ai = form.get("type_ai") == "on"                    # refine anchor types via the key
     if not pids:
         return JSONResponse({"error": "Выберите хотя бы один проект."}, status_code=400)
-
-    phrases = [a.phrase for a in db.query(IgnoreAnchor).all()] if smart else []
-    slots = appsettings.get_slots(db) if smart else []
-    type_slot = appsettings.get_any_slot(db) if type_ai else None
 
     projects = db.query(Project).filter(Project.id.in_(pids)).all()
     files: dict[str, bytes] = {}
     results = []
     for project in projects:
-        exclude: set[str] = set()
-        if smart and phrases:
-            kept, removed, mode = anchor_filter.filter_keywords(
-                [k.keyword for k in project.keywords], phrases, slots)
-            exclude = removed
-            if removed:
-                log_event(db, "INFO", "filter",
-                          f"Умный фильтр анкоров: {project.url} — исключено {len(removed)} ключей ({mode})",
-                          ", ".join(sorted(removed))[:500])
+        # Recognition (stop-anchor exclusion + anchor types) is precomputed at
+        # upload and stored on keywords — generation stays fast and offline.
+        exclude: set[str] = {k.keyword for k in project.keywords if k.excluded} if smart else set()
+        if exclude:
+            log_event(db, "INFO", "filter",
+                      f"Умный фильтр анкоров: {project.url} — исключено {len(exclude)} ключей",
+                      ", ".join(sorted(exclude))[:500])
         sheets = generate_project_sheets(db, project, exclude_keywords=exclude)
         if not sheets:
             continue
         anchors = {r.anchor for rows in sheets.values() for r in rows}
-        type_map = anchortypes.build_type_map(
-            anchors, brand=project.brand or "",
-            keywords=[k.keyword for k in project.keywords], slot=type_slot)
+        # Anchorless/internal anchors -> deterministic; keyword anchors -> stored type.
+        type_map = anchortypes.build_type_map(anchors, brand=project.brand or "",
+                                              keywords=[k.keyword for k in project.keywords])
+        type_map.update({k.keyword: k.anchor_type for k in project.keywords
+                         if k.anchor_type and k.keyword in anchors})
         files[safe_filename(project.url)] = build_workbook(
             sheets, sprint=sprint, seo_specialist=seo_specialist,
             language=project.language or "", brand=project.brand or "",

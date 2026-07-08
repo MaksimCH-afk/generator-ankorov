@@ -78,6 +78,43 @@ def test_export_and_breakdown():
         assert e.status_code == 200 and "spreadsheet" in e.headers["content-type"]
 
 
+def test_upload_classifies_and_generation_excludes_stopanchors():
+    from app.models import Keyword
+    with TestClient(app) as c:
+        c.post("/projects/create", data={"url": "https://stp.com/", "brand": "stp"}, follow_redirects=False)
+        pid = _project_id("https://stp.com/")
+        # "no deposit bonus" is a default stop-anchor -> should be excluded at upload
+        csv = b"keyword,frequency\nstp casino,1000\nstp,500\nstp no deposit bonus,200\n"
+        c.post(f"/projects/{pid}/keywords", files={"file": ("f.csv", csv, "text/csv")}, follow_redirects=False)
+        db = SessionLocal()
+        kws = {k.keyword: k for k in db.query(Keyword).filter_by(project_id=pid).all()}
+        assert kws["stp no deposit bonus"].excluded is True     # stop-anchor flagged at upload
+        assert kws["stp casino"].excluded is False
+        assert all(k.anchor_type for k in kws.values())          # types stored
+        db.close()
+        sid = SessionLocal().query(Strategy).first().id
+        c.post(f"/projects/{pid}/strategy", data={"strategy_id": sid}, follow_redirects=False)
+        c.post(f"/projects/{pid}/volume", data={"volume": 100}, follow_redirects=False)
+        # generation with smart on drops the excluded keyword; runs offline
+        r = c.post("/generate", data={"project_ids": [pid], "export_format": "separate",
+                                      "group_mode": "group", "smart_filter": "on"})
+        assert r.status_code == 200
+        d = c.get(f"/generate/download/{r.json()['token']}")
+        anchors = _anchor_column(d.content)
+        assert "stp no deposit bonus" not in anchors and "stp casino" in anchors
+
+
+def _anchor_column(xlsx_bytes):
+    import io as _io
+    from openpyxl import load_workbook
+    from app.excel_export import BASE_COLUMNS
+    ws = load_workbook(_io.BytesIO(xlsx_bytes)).active
+    # grouped export -> leading Link Q-ty column
+    off = 1 if [c.value for c in ws[1]][0] == "Link Q-ty" else 0
+    ai = BASE_COLUMNS.index("Anchor") + off
+    return {[c.value for c in ws[r]][ai] for r in range(2, ws.max_row + 1)}
+
+
 def test_duplicate_project_reuses_keywords():
     with TestClient(app) as c:
         c.post("/projects/create", data={"url": "https://dup-src.com/", "language": "German",
