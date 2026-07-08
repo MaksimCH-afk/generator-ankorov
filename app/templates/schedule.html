@@ -34,8 +34,8 @@
             <input type="checkbox" name="use_model" value="on" {{ 'disabled' if not has_any_key }}>
             <span>
                 <b>Уточнять типы анкоров нейросетью</b>
-                {% if has_any_key %}<span class="badge green" style="margin-left:6px">ключ подключён</span>
-                {% else %}<span class="badge gray" style="margin-left:6px">добавьте ключ ниже — без него работает по столбцу Anchor Type</span>{% endif %}
+                {% if has_any_key %}<span class="badge green" style="margin-left:6px">ключ подключён · модель {{ key_model }}</span>
+                {% else %}<span class="badge gray" style="margin-left:6px">добавьте ключ в «Проекты → Настройки» — без него по столбцу Anchor Type</span>{% endif %}
             </span>
         </label>
         <label class="toggle-row" style="margin-top:10px">
@@ -90,39 +90,11 @@
 </div>
 
 <div class="card">
-    <div class="card-title">Ключ OpenRouter (для классификации анкоров)</div>
-    <p class="help-text" style="margin-top:0">
-        Отдельный ключ для этой вкладки (не обязателен — по умолчанию тип берётся из столбца
-        <span class="mono">Anchor Type</span>). Классифицируются только <b>уникальные</b> анкоры (их обычно единицы
-        даже на тысячи ссылок), поэтому для них используется <b>умная модель</b>
-        (<span class="mono">{{ key_model }}</span>), а <b>дешёвая</b> (<span class="mono">{{ key_model_cheap }}</span>) —
-        как запасная для тех, что умная не разметила. Ключ хранится локально и не показывается целиком.
+    <p class="help-text" style="margin:0">
+        Ключ OpenRouter и модели для каждого действия задаются в разделе
+        <a href="/">«Проекты» → «Настройки»</a>. Для классификации уникальных анкоров используется
+        основная модель <span class="mono">{{ key_model }}</span> с запасной <span class="mono">{{ key_model_cheap }}</span>.
     </p>
-    <form method="post" action="/schedule/key" style="margin-bottom:12px">
-        <div style="margin-bottom:8px">
-            {% if key_saved %}<span class="badge green">ключ сохранён {{ key_masked }}</span>
-            {% else %}<span class="badge gray">ключ не задан</span>{% endif %}
-        </div>
-        <div class="inline">
-            <div style="flex:1;min-width:220px">
-                <label>API-ключ</label>
-                <input type="text" name="key" placeholder="sk-or-v1-…  (пусто = не менять)" autocomplete="off">
-            </div>
-            <div style="flex:1;min-width:180px">
-                <label>Умная модель</label>
-                <input type="text" name="model" class="mono" value="{{ key_model }}" placeholder="openai/gpt-4o">
-            </div>
-            <div style="flex:1;min-width:180px">
-                <label>Дешёвая (запасная)</label>
-                <input type="text" name="model_cheap" class="mono" value="{{ key_model_cheap }}" placeholder="openai/gpt-4o-mini">
-            </div>
-            <button class="narrow" type="submit" name="action" value="save">Сохранить</button>
-            {% if key_saved %}<button class="btn-danger btn-sm narrow" type="submit" name="action" value="clear">Очистить</button>{% endif %}
-        </div>
-    </form>
-    <form method="post" action="/schedule/check" style="display:inline">
-        <button class="btn-sec btn-sm" type="submit">Проверить ключ</button>
-    </form>
 </div>
 {% endblock %}
 

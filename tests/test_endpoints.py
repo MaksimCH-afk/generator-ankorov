@@ -78,6 +78,34 @@ def test_export_and_breakdown():
         assert e.status_code == 200 and "spreadsheet" in e.headers["content-type"]
 
 
+def test_settings_key_and_per_action_models():
+    from app import appsettings
+    from app.database import SessionLocal
+    with TestClient(app) as c:
+        # recommended defaults are returned before anything is saved
+        db = SessionLocal()
+        assert appsettings.get_action_model(db, "types") == appsettings.RECOMMENDED["types"]
+        db.close()
+        # save a key + custom models per action
+        data = {"key": "sk-or-v1-testkey1234", "model_jokes": "openai/gpt-4o-mini",
+                "model_types": "anthropic/claude-3.5-sonnet", "model_smart": "openai/gpt-4o-mini",
+                "model_schedule_smart": "openai/gpt-4o", "model_schedule_cheap": "openai/gpt-4o-mini"}
+        r = c.post("/settings/save", data=data, follow_redirects=False)
+        assert r.status_code == 303
+        db = SessionLocal()
+        assert appsettings.get_key(db) == "sk-or-v1-testkey1234"
+        assert appsettings.get_action_model(db, "types") == "anthropic/claude-3.5-sonnet"
+        assert appsettings.get_action_slot(db, "jokes") == ("sk-or-v1-testkey1234", "openai/gpt-4o-mini")
+        db.close()
+        # dashboard shows the settings block + saved-key badge
+        assert "Проставить рекомендуемые" in c.get("/").text
+        # clearing the key
+        c.post("/settings/save", data={"action": "clear_key"}, follow_redirects=False)
+        db = SessionLocal()
+        assert appsettings.get_key(db) == ""
+        db.close()
+
+
 def test_upload_classifies_and_generation_excludes_stopanchors():
     from app.models import Keyword
     with TestClient(app) as c:
