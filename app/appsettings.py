@@ -37,6 +37,12 @@ RECOMMENDED = {
 # Legacy setting keys we still read so previously-saved keys keep working.
 _LEGACY_KEYS = ("or_key", "or_key_1", "or_key_2", "or_key_schedule")
 
+# Global generation/export params (moved out of the Generate screen into Settings).
+GEN_DEFAULTS = {
+    "sprint": "", "seo": "", "format": "separate", "group": "expand",
+    "smart": "1", "include_language": "0",
+}
+
 
 def get_setting(db: Session, key: str, default: str = "") -> str:
     row = db.get(AppSetting, key)
@@ -94,6 +100,29 @@ def get_action_slot(db: Session, action: str) -> tuple[str, str] | None:
     """``(key, model)`` for an action, or ``None`` when no key is configured."""
     key = get_key(db)
     return (key, get_action_model(db, action)) if key else None
+
+
+# --------------------------------------------------------------------------- #
+# Global generation / export parameters
+# --------------------------------------------------------------------------- #
+def get_gen_settings(db: Session) -> dict:
+    return {
+        "sprint": get_setting(db, "gen_sprint", GEN_DEFAULTS["sprint"]),
+        "seo": get_setting(db, "gen_seo", GEN_DEFAULTS["seo"]),
+        "format": get_setting(db, "gen_format", GEN_DEFAULTS["format"]),
+        "group": get_setting(db, "gen_group", GEN_DEFAULTS["group"]),
+        "smart": get_setting(db, "gen_smart", GEN_DEFAULTS["smart"]) == "1",
+        "include_language": get_setting(db, "gen_include_language", GEN_DEFAULTS["include_language"]) == "1",
+    }
+
+
+def save_gen_settings(db: Session, form) -> None:
+    set_setting(db, "gen_sprint", (form.get("gen_sprint") or "").strip())
+    set_setting(db, "gen_seo", (form.get("gen_seo") or "").strip())
+    set_setting(db, "gen_format", form.get("gen_format") or GEN_DEFAULTS["format"])
+    set_setting(db, "gen_group", form.get("gen_group") or GEN_DEFAULTS["group"])
+    set_setting(db, "gen_smart", "1" if form.get("gen_smart") == "on" else "0")
+    set_setting(db, "gen_include_language", "1" if form.get("gen_include_language") == "on" else "0")
 
 
 # --------------------------------------------------------------------------- #

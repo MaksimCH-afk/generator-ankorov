@@ -18,11 +18,11 @@
 </div>
 
 <div class="card" id="settings-panel" style="display:none">
-    <div class="card-title">Настройки — ключ OpenRouter и модели</div>
+    <div class="card-title">Настройки — ключ, модели и параметры выгрузки</div>
     <p class="help-text" style="margin-top:0;margin-bottom:14px">
         Задаётся один раз, до импорта и генерации. Один ключ OpenRouter на всё; для каждого действия —
-        своя модель. Ключ хранится локально и не показывается целиком. Кнопка «Проставить рекомендуемые»
-        подставит подобранные модели (можно поменять на свои).
+        своя модель. Ключ хранится локально и не показывается целиком. «Проставить рекомендуемые»
+        подставит подобранные модели.
     </p>
     <form method="post" action="/settings/save" id="settings-form">
         <div class="field" style="max-width:520px">
@@ -44,20 +44,51 @@
             </div>
             {% endfor %}
         </div>
-        <div class="spacer"></div>
-        <div class="row-actions">
-            <button type="submit">Сохранить</button>
-            <button type="button" class="btn-sec" onclick="applyRecommended()">Проставить рекомендуемые</button>
-            {% if key_present %}
-            <button type="submit" class="btn-danger btn-sm" name="action" value="clear_key"
-                    onclick="return confirm('Очистить сохранённый ключ?')">Очистить ключ</button>
-            {% endif %}
+
+        <hr>
+        <div class="card-title" style="font-size:14px">Параметры выгрузки</div>
+        <div class="grid grid-4">
+            <div class="field"><label>Sprint</label>
+                <input name="gen_sprint" value="{{ gen_settings.sprint }}" placeholder="напр. 122"></div>
+            <div class="field"><label>SEO Specialist</label>
+                <select name="gen_seo">
+                    {% for s in seo_specialists %}<option value="{{ s }}" {{ 'selected' if gen_settings.seo==s }}>{{ s }}</option>{% endfor %}
+                </select></div>
+            <div class="field"><label>Формат выгрузки</label>
+                <select name="gen_format">
+                    <option value="separate" {{ 'selected' if gen_settings.format=='separate' }}>Раздельные Excel-файлы</option>
+                    <option value="zip" {{ 'selected' if gen_settings.format=='zip' }}>Один ZIP-архив</option>
+                </select></div>
+            <div class="field"><label>Строки</label>
+                <select name="gen_group">
+                    <option value="expand" {{ 'selected' if gen_settings.group=='expand' }}>Одна строка = одна ссылка</option>
+                    <option value="group" {{ 'selected' if gen_settings.group=='group' }}>Сгруппировать (Link Q-ty)</option>
+                </select></div>
         </div>
+        <label class="toggle-row" style="margin-top:12px">
+            <input type="checkbox" name="gen_smart" value="on" {{ 'checked' if gen_settings.smart }}>
+            <span><b>Исключать стоп-анкоры</b>
+                <span class="badge gray" style="margin-left:6px">по распознаванию при загрузке</span></span>
+        </label>
+        <label class="toggle-row" style="margin-top:10px">
+            <input type="checkbox" name="gen_include_language" value="on" {{ 'checked' if gen_settings.include_language }}>
+            <span><b>Выводить столбец «Article Language»</b>
+                <span class="badge gray" style="margin-left:6px">по умолчанию не выводится</span></span>
+        </label>
     </form>
+
     <div class="spacer"></div>
-    <form method="post" action="/settings/check" style="display:inline">
-        <button class="btn-sec btn-sm" type="submit">Проверить ключ</button>
-    </form>
+    <div class="row-actions" style="align-items:center">
+        <button type="submit" form="settings-form">Сохранить</button>
+        <button type="button" class="btn-sec" onclick="applyRecommended()">Проставить рекомендуемые</button>
+        {% if key_present %}
+        <button type="submit" form="settings-form" class="btn-danger btn-sm" name="action" value="clear_key"
+                onclick="return confirm('Очистить сохранённый ключ?')">Очистить ключ</button>
+        {% endif %}
+        <form method="post" action="/settings/check" style="margin-left:auto">
+            <button class="btn-sec btn-sm" type="submit">Проверить ключ</button>
+        </form>
+    </div>
 </div>
 
 <div class="card" id="import-panel" style="display:none">
