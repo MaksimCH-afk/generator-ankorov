@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
-from .. import appsettings, scheduling
+from .. import appsettings, genstore, scheduling
 from ..database import get_db
 from ..excel_export import build_zip
 from ..logging_util import log_event
@@ -25,6 +25,12 @@ _HISTORY_LIMIT = 50
 @router.get("/schedule", response_class=HTMLResponse)
 def schedule_page(request: Request, db: Session = Depends(get_db), msg: str = "", error: str = ""):
     history = db.query(ScheduleRun).order_by(ScheduleRun.created_at.desc(), ScheduleRun.id.desc()).limit(50).all()
+    # Optional handoff from the Generate screen: ?src=<token> — offer the just
+    # generated project files directly, no download/upload.
+    src = (request.query_params.get("src") or "").strip()
+    run = genstore.get_run(src) if src else None
+    src_token = src if run else ""
+    src_files = sorted(run.keys()) if run else []
     return templates.TemplateResponse(
         "schedule.html",
         {
@@ -35,6 +41,8 @@ def schedule_page(request: Request, db: Session = Depends(get_db), msg: str = ""
             "key_model_cheap": appsettings.get_schedule_cheap_model(db),
             "has_any_key": appsettings.has_key(db),
             "history": history,
+            "src_token": src_token,
+            "src_files": src_files,
             "msg": msg,
             "error": error,
         },
@@ -45,8 +53,17 @@ def schedule_page(request: Request, db: Session = Depends(get_db), msg: str = ""
 async def schedule_generate(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
     uploads = [f for f in form.getlist("files") if getattr(f, "filename", "")]
-    if not uploads:
-        return RedirectResponse("/schedule?error=Выберите файл(ы) плана (Excel).", status_code=303)
+    # Sources = uploaded files first, then any selected files handed off from a
+    # generation run (kept in memory under src_token). Uploads first so per-file
+    # rows (upload order) stay index-aligned.
+    sources: list[tuple[str, bytes]] = [(up.filename, await up.read()) for up in uploads]
+    run = genstore.get_run((form.get("src_token") or "").strip())
+    if run:
+        for fn in form.getlist("src_files"):
+            if fn in run:
+                sources.append((fn, run[fn]))
+    if not sources:
+        return RedirectResponse("/schedule?error=Выберите файл(ы) плана или проекты из генерации.", status_code=303)
     try:
         days = int(form.get("days") or 30)
     except ValueError:
@@ -83,15 +100,15 @@ async def schedule_generate(request: Request, db: Session = Depends(get_db)):
                 pass
         return start
 
-    # Parse every uploaded plan (keep its own days/start by upload index).
+    # Parse every source plan (keep its own days/start by index).
     plans = []  # (base, header, links, days_i, start_i)
-    for i, up in enumerate(uploads):
+    for i, (name, content) in enumerate(sources):
         try:
-            header, links = scheduling.read_plan(await up.read())
+            header, links = scheduling.read_plan(content)
         except Exception:
             continue
         if links:
-            base = os.path.splitext(os.path.basename(up.filename))[0]
+            base = os.path.splitext(os.path.basename(name))[0]
             plans.append((base, header, links, resolve_days(i), resolve_start(i)))
     if not plans:
         return RedirectResponse("/schedule?error=В файлах нет строк со ссылками (нужен Excel из проектов).",

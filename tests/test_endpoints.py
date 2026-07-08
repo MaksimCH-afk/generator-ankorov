@@ -207,6 +207,37 @@ def test_duplicate_project_reuses_keywords():
         assert "location" in r2.headers
 
 
+def test_generate_to_schedule_handoff():
+    """Bridge Generation -> Date distribution without download/upload, subset only."""
+    with TestClient(app) as c:
+        # two ready projects
+        ids = []
+        for name in ("hoff-a.com", "hoff-b.com"):
+            c.post("/projects/create", data={"url": f"https://{name}/", "brand": name.split("-")[0]},
+                   follow_redirects=False)
+            pid = _project_id(f"https://{name}/")
+            c.post(f"/projects/{pid}/keywords",
+                   files={"file": ("f.csv", b"keyword,frequency\nk casino,100\n", "text/csv")}, follow_redirects=False)
+            sid = SessionLocal().query(Strategy).first().id
+            c.post(f"/projects/{pid}/strategy", data={"strategy_id": sid}, follow_redirects=False)
+            c.post(f"/projects/{pid}/volume", data={"volume": 60}, follow_redirects=False)
+            ids.append(pid)
+        # generate both -> get a token
+        r = c.post("/generate", data={"project_ids": ids})
+        token = r.json()["token"]
+        files = [x["file"] for x in r.json()["results"]]
+        assert len(files) == 2
+        # schedule page offers the generated files
+        page = c.get(f"/schedule?src={token}").text
+        assert "Из генерации" in page and files[0] in page
+        # distribute only ONE of them straight from the handoff (no upload)
+        r2 = c.post("/schedule/generate",
+                    data={"days": "5", "start_date": "2026-07-09", "src_token": token,
+                          "src_files": [files[0]]}, follow_redirects=False)
+        assert r2.status_code == 200
+        assert "spreadsheet" in r2.headers["content-type"]  # single file -> xlsx, not zip
+
+
 def test_schedule_multiple_files_returns_zip():
     import io as _io
     import zipfile
