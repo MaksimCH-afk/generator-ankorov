@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime
 import io
+import re
 from collections import defaultdict
 
 from openpyxl import Workbook, load_workbook
@@ -58,45 +59,93 @@ def classify(anchor: str, anchor_type: str) -> str:
     return bucket_of(anchortypes.classify_one(anchor))
 
 
-def read_plan(content: bytes) -> tuple[list[str], list[dict]]:
-    """Parse an exported plan into ``(header, links)``.
+def _sheet_links(rows: list[list[str]]):
+    """Parse one sheet's rows -> ``(header, links, project_idx)`` or ``None``.
 
-    Each link is ``{"row": [values aligned to header], "anchor": str,
-    "category": str}``. A ``Link Q-ty`` column (grouped export) is expanded to
-    one link per unit. Trailing empty columns are trimmed.
+    Each link is ``{"row", "anchor", "category", "project"}``. ``Link Q-ty`` is
+    expanded to one link per unit; trailing empty header columns are trimmed.
     """
-    wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-    ws = wb.active
-    rows = [["" if c is None else str(c).strip() for c in r] for r in ws.iter_rows(values_only=True)]
     rows = [r for r in rows if any(r)]
     if not rows:
-        return [], []
-    header = rows[0][:]
-    while header and not header[-1]:
-        header.pop()
+        return None
+    full = rows[0]
+    # Trim leading and trailing empty (unlabeled) header columns.
+    start = 0
+    while start < len(full) and not full[start]:
+        start += 1
+    end = len(full)
+    while end > start and not full[end - 1]:
+        end -= 1
+    header = full[start:end]
     ncol = len(header)
     idx = {name: i for i, name in enumerate(header)}
-    qty_i = idx.get("Link Q-ty")
-    anchor_i = idx.get("Anchor")
-    at_i = idx.get("Anchor Type")
-
+    qty_i, anchor_i, at_i, proj_i = idx.get("Link Q-ty"), idx.get("Anchor"), idx.get("Anchor Type"), idx.get("Project")
     links: list[dict] = []
     for raw in rows[1:]:
-        row = [(raw[i] if i < len(raw) else "") for i in range(ncol)]
+        row = [(raw[start + i] if start + i < len(raw) else "") for i in range(ncol)]
         anchor = row[anchor_i] if anchor_i is not None else ""
         if not anchor:
             continue
-        at = row[at_i] if at_i is not None else ""
-        cat = classify(anchor, at)
+        cat = classify(anchor, row[at_i] if at_i is not None else "")
         n = 1
         if qty_i is not None:
             try:
                 n = max(1, int(float(row[qty_i])))
             except (ValueError, TypeError):
                 n = 1
+        proj = row[proj_i] if proj_i is not None else ""
         for _ in range(n):
-            links.append({"row": row[:], "anchor": anchor, "category": cat})
+            links.append({"row": row[:], "anchor": anchor, "category": cat, "project": proj})
+    return header, links, proj_i
+
+
+def read_plan(content: bytes) -> tuple[list[str], list[dict]]:
+    """Parse the active sheet of an exported plan into ``(header, links)``."""
+    wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    ws = wb.active
+    rows = [["" if c is None else str(c).strip() for c in r] for r in ws.iter_rows(values_only=True)]
+    res = _sheet_links(rows)
+    if not res:
+        return [], []
+    header, links, _ = res
     return header, links
+
+
+def read_project_plans(content: bytes, default_name: str = "plan") -> list[dict]:
+    """Parse an exported plan into one sub-plan **per project** across ALL sheets.
+
+    A single workbook often holds many projects (``Project`` column) on one or
+    more sheets (names vary). Each distinct project becomes its own plan so it
+    can be date-distributed independently. Returns a list of
+    ``{"name", "header", "links"}``. Sheets without a ``Project`` column yield a
+    single plan named after the sheet.
+    """
+    wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    plans: list[dict] = []
+    for ws in wb.worksheets:
+        rows = [["" if c is None else str(c).strip() for c in r] for r in ws.iter_rows(values_only=True)]
+        res = _sheet_links(rows)
+        if not res:
+            continue
+        header, links, proj_i = res
+        if not links:
+            continue
+        if proj_i is not None:
+            groups: dict[str, list[dict]] = defaultdict(list)
+            for l in links:
+                groups[l["project"] or (ws.title or default_name)].append(l)
+            for name, ls in groups.items():
+                plans.append({"name": name, "header": header, "links": ls})
+        else:
+            plans.append({"name": ws.title or default_name, "header": header, "links": links})
+    return plans
+
+
+def safe_name(name: str) -> str:
+    """Filesystem-safe base name for a project/sheet."""
+    n = re.sub(r"^https?://", "", (name or "").strip()).strip("/")
+    n = re.sub(r"[^A-Za-z0-9._-]+", "_", n)
+    return n or "plan"
 
 
 def day_capacities(total: int, days: int) -> list[int]:
@@ -171,17 +220,26 @@ def classify_with_model(anchors: list[str], key: str, model: str) -> dict[str, s
 
 
 def build_scheduled_workbook(header: list[str], placements: list[tuple[datetime.date, dict]],
-                             date_fmt: str = "%d.%m.%Y") -> bytes:
-    """Write the re-scheduled plan: ``Sprint`` column becomes ``Date``."""
-    sprint_i = header.index("Sprint") if "Sprint" in header else None
-    out_header = ["Date" if h == "Sprint" else h for h in header]
-    if sprint_i is None:
-        out_header = ["Date"] + out_header  # no Sprint column -> prepend Date
+                             date_fmt: str = "%d.%m.%Y", sheet_title: str = "Планнинг по датам") -> bytes:
+    """Write the re-scheduled plan. Puts dates into the ``Sprint`` column
+    (renamed to ``Date``), or into an existing ``Date`` column, or a new leading
+    ``Date`` column when the source has neither."""
+    if "Sprint" in header:
+        date_i = header.index("Sprint")
+        out_header = ["Date" if h == "Sprint" else h for h in header]
+    elif "Date" in header:
+        date_i = header.index("Date")
+        out_header = header[:]
+    else:
+        date_i = None
+        out_header = ["Date"] + header
 
     def make_row(date, link):
         row = link["row"][:]
-        if sprint_i is not None:
-            row[sprint_i] = date.strftime(date_fmt)
+        if date_i is not None:
+            while len(row) <= date_i:
+                row.append("")
+            row[date_i] = date.strftime(date_fmt)
             return row
         return [date.strftime(date_fmt)] + row
 
@@ -192,7 +250,7 @@ def build_scheduled_workbook(header: list[str], placements: list[tuple[datetime.
                 widths[i] = max(widths[i], len(str(v)))
 
     wb = Workbook(write_only=True)
-    ws = wb.create_sheet(title="Планнинг по датам")
+    ws = wb.create_sheet(title=re.sub(r"[\[\]:*?/\\]", "-", (sheet_title or "План"))[:31] or "План")
     for i, w in enumerate(widths):
         ws.column_dimensions[get_column_letter(i + 1)].width = min(w + 4, 70)
     ws.freeze_panes = "A2"

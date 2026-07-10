@@ -100,21 +100,24 @@ async def schedule_generate(request: Request, db: Session = Depends(get_db)):
                 pass
         return start
 
-    # Parse every source plan (keep its own days/start by index).
-    plans = []  # (base, header, links, days_i, start_i)
+    # Split every source into per-project plans (Project column, across sheets),
+    # keeping each source's window. A single big file with many projects becomes
+    # one plan per project, each distributed independently over the same window.
+    plans = []  # (name, header, links, days_i, start_i)
     for i, (name, content) in enumerate(sources):
+        base = os.path.splitext(os.path.basename(name))[0]
         try:
-            header, links = scheduling.read_plan(content)
+            subplans = scheduling.read_project_plans(content, default_name=base)
         except Exception:
             continue
-        if links:
-            base = os.path.splitext(os.path.basename(name))[0]
-            plans.append((base, header, links, resolve_days(i), resolve_start(i)))
+        for sp in subplans:
+            if sp["links"]:
+                plans.append((sp["name"], sp["header"], sp["links"], resolve_days(i), resolve_start(i)))
     if not plans:
         return RedirectResponse("/schedule?error=В файлах нет строк со ссылками (нужен Excel из проектов).",
                                 status_code=303)
 
-    # Classify DISTINCT anchors across ALL files once (smart model for the few
+    # Classify DISTINCT anchors across ALL plans once (smart model for the few
     # uniques, cheap model as fallback), then apply the buckets to every link.
     mode = "по типам анкоров"
     if use_model:
@@ -129,26 +132,25 @@ async def schedule_generate(request: Request, db: Session = Depends(get_db)):
                         l["category"] = buckets[l["anchor"]]
             mode = f"нейросеть ({smart[1]}" + (f" + {cheap[1]}" if cheap else "") + ")"
 
-    # Distribute each file independently over its own window.
+    # Distribute each project independently over its window; one file per project.
     files: dict[str, bytes] = {}
     total_links = 0
-    for base, header, links, days_i, start_i in plans:
+    for name, header, links, days_i, start_i in plans:
         placements = scheduling.distribute(links, days_i, start_i)
-        files[f"{base}-{start_i.isoformat()}-{days_i}d.xlsx"] = \
-            scheduling.build_scheduled_workbook(header, placements)
+        fname = f"{scheduling.safe_name(name)}-{start_i.isoformat()}-{days_i}d.xlsx"
+        files[fname] = scheduling.build_scheduled_workbook(header, placements, sheet_title=scheduling.safe_name(name))
         total_links += len(links)
 
-    windows = "; ".join(f"{b}: {s.isoformat()} +{d}д" for b, _, _, d, s in plans)
     log_event(db, "INFO", "schedule",
-              f"Распределение по датам: {len(plans)} файл(ов), {total_links} ссылок"
-              + (" (индивидуальные сроки)" if per_file else f", {days} дн."),
-              f"{windows}; классификация: {mode}")
+              f"Распределение по датам: {len(plans)} проект(ов), {total_links} ссылок"
+              + (" (индивидуальные сроки)" if per_file else f", {days} дн. с {start.isoformat()}"),
+              f"проекты: {', '.join(n for n, _, _, _, _ in plans)[:400]}; классификация: {mode}")
 
     if len(files) == 1:
         out_name, out_content = next(iter(files.items()))
         out_media = XLSX_MEDIA
     else:
-        out_name = f"planning-{start.isoformat()}-{len(files)}files.zip"
+        out_name = f"planning-{start.isoformat()}-{len(files)}proj.zip"
         out_content, out_media = build_zip(files), "application/zip"
 
     # Save to history so the result can be re-downloaded any time.
