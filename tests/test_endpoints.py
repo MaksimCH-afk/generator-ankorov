@@ -271,8 +271,49 @@ def test_schedule_multiple_files_returns_zip():
                            ("files", ("b.xlsx", plan_book("b-casino.com"), "application/octet-stream"))],
                     follow_redirects=False)
         names = zipfile.ZipFile(_io.BytesIO(r2.content)).namelist()
-        assert "a-2026-07-01-10d.xlsx" in names   # file a: 10 days from Jul 1
-        assert "b-2026-08-01-20d.xlsx" in names   # file b: 20 days from Aug 1
+        # names come from the Project column; per-file windows align to upload order
+        assert "a-casino.com-2026-07-01-10d.xlsx" in names   # file a: 10 days from Jul 1
+        assert "b-casino.com-2026-08-01-20d.xlsx" in names   # file b: 20 days from Aug 1
+
+
+def test_schedule_splits_one_file_by_project():
+    import io as _io
+    import zipfile
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active; ws.title = "Планинг"
+    ws.append(["SEO Specialist", "Project", "Project Url", "URL Type", "Link Type",
+               "Anchor Type", "Anchor", "Keyword"])
+    for proj, n in [("alpha.at", 10), ("beta.com", 20), ("gamma.co.at", 5)]:
+        for _ in range(n):
+            ws.append(["M", proj, f"https://{proj}/", "Main Page", "BH", "ND", f"https://{proj}/", ""])
+    ws2 = wb.create_sheet("Крауд")  # second sheet, one more project
+    ws2.append(["Date", "Project", "Project Url", "URL Type", "Link Type", "Anchor Type", "Anchor", "Keyword"])
+    for _ in range(8):
+        ws2.append(["", "delta.at", "https://delta.at/", "Main Page", "CS", "ND", "https://delta.at/", ""])
+    b = _io.BytesIO(); wb.save(b)
+
+    with TestClient(app) as c:
+        r = c.post("/schedule/generate",
+                   data={"days": "30", "start_date": "2026-07-09", "use_model": ""},
+                   files=[("files", ("big.xlsx", b.getvalue(), "application/octet-stream"))],
+                   follow_redirects=False)
+        assert r.status_code == 200 and "zip" in r.headers["content-type"]
+        names = zipfile.ZipFile(_io.BytesIO(r.content)).namelist()
+        # one dated file per project, across both sheets, same window
+        assert len(names) == 4
+        assert any(n.startswith("alpha.at-2026-07-09-30d") for n in names)
+        assert any(n.startswith("delta.at-2026-07-09-30d") for n in names)
+        # each project's links spread within the window
+        zf = zipfile.ZipFile(_io.BytesIO(r.content))
+        from openpyxl import load_workbook
+        ws_a = load_workbook(_io.BytesIO(zf.read([n for n in names if n.startswith("alpha")][0]))).active
+        hdr = [c.value for c in ws_a[1]]
+        assert "Date" in hdr
+        di = hdr.index("Date")
+        dates = {[c.value for c in ws_a[r2]][di] for r2 in range(2, ws_a.max_row + 1)}
+        assert len(dates) > 1  # alpha's 10 links spread over multiple days
 
 
 def test_schedule_history_saved_and_downloadable():
