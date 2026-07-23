@@ -118,9 +118,17 @@
 {% block scripts %}
 <script>
 function post(url, body){ return fetch(url, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body:body}); }
-function setStrategy(pid, v){ post('/projects/'+pid+'/strategy', 'strategy_id='+encodeURIComponent(v)).then(()=>location.reload()); }
-function setVolume(pid, v){ post('/projects/'+pid+'/volume', 'volume='+encodeURIComponent(v)+'&next=/generate').then(()=>location.reload()); }
-function setLang(pid, v){ post('/projects/'+pid+'/language', 'language='+encodeURIComponent(v)).then(()=>location.reload()); }
+// Inline strategy/volume/language edits reload the page to recompute the
+// distribution bar. Persist the current checkbox selection across that reload
+// so changing a value doesn't reset which projects are selected.
+function saveSelForReload(){
+    const ids=[...document.querySelectorAll('input[name="project_ids"]:checked')].map(c=>c.value);
+    try{ sessionStorage.setItem('genSel', JSON.stringify(ids)); }catch(e){}
+}
+function reloadKeepingSel(){ saveSelForReload(); location.reload(); }
+function setStrategy(pid, v){ post('/projects/'+pid+'/strategy', 'strategy_id='+encodeURIComponent(v)).then(reloadKeepingSel); }
+function setVolume(pid, v){ post('/projects/'+pid+'/volume', 'volume='+encodeURIComponent(v)+'&next=/generate').then(reloadKeepingSel); }
+function setLang(pid, v){ post('/projects/'+pid+'/language', 'language='+encodeURIComponent(v)).then(reloadKeepingSel); }
 function loadDist(pid){
     const box=document.getElementById('dist-'+pid);
     const btn=document.getElementById('distbtn-'+pid);
@@ -178,6 +186,16 @@ function runGenerate(){
 }
 function closeModal(e){ if(e.target.id==='gen-modal') document.getElementById('gen-modal').classList.remove('open'); }
 
-document.addEventListener('DOMContentLoaded', ()=>{ recount(); });
+// Restore a selection saved right before an inline-edit reload (consumed once,
+// so a fresh visit keeps the default "all ready" selection).
+function restoreSelAfterReload(){
+    let raw=null;
+    try{ raw=sessionStorage.getItem('genSel'); sessionStorage.removeItem('genSel'); }catch(e){}
+    if(raw===null) return;
+    let ids; try{ ids=JSON.parse(raw); }catch(e){ return; }
+    const set=new Set(ids);
+    document.querySelectorAll('input[name="project_ids"]').forEach(cb=>{ cb.checked=set.has(cb.value); });
+}
+document.addEventListener('DOMContentLoaded', ()=>{ restoreSelAfterReload(); recount(); });
 </script>
 {% endblock %}
